@@ -81,10 +81,13 @@ internal static class Theme
         if (IsDark)
         {
             // Default ComboBox chrome ignores Background; keep the item text readable on its light popup.
-            r[typeof(ComboBox)] = Style(typeof(ComboBox));
-            r[typeof(ComboBoxItem)] = Style(typeof(ComboBoxItem));
-            ((Style)r[typeof(ComboBox)]).Setters.Add(new Setter(Control.ForegroundProperty, Brushes.Black));
-            ((Style)r[typeof(ComboBoxItem)]).Setters.Add(new Setter(Control.ForegroundProperty, Brushes.Black));
+            // Styles are finished before they go into the resources: WPF seals a style once it is in use.
+            var combo = Style(typeof(ComboBox));
+            combo.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.Black));
+            r[typeof(ComboBox)] = combo;
+            var comboItem = Style(typeof(ComboBoxItem));
+            comboItem.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.Black));
+            r[typeof(ComboBoxItem)] = comboItem;
         }
     }
 

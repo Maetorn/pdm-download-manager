@@ -67,7 +67,13 @@ internal sealed class PdmApp : Application
         Settings = Store.LoadSettings();
         NetConfig.Configure(Settings);
         Loc.Init(Settings.Language);
-        Theme.Apply(this, Settings.Theme);
+        try { Theme.Apply(this, Settings.Theme); }
+        catch (Exception ex)
+        {
+            // A theme problem must never keep PDM from starting (it would hold the single-instance lock with no window).
+            Log.Error("Theme failed, using the light theme", ex);
+            try { Theme.Apply(this, "Light"); } catch { }
+        }
         UpdateAllowedOrigins();
 
         Manager = new DownloadManager(Settings, new DispatcherSynchronizationContext(Dispatcher));
