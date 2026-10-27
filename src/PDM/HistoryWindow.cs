@@ -84,7 +84,7 @@ internal sealed class HistoryWindow : PdmWindow
 
         var bar = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
         var searchHost = new StackPanel { Orientation = Orientation.Horizontal };
-        searchHost.Children.Add(new TextBlock { Text = Loc.T("Search") + ":", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        searchHost.Children.Add(new TextBlock { Text = Loc.T("Search").TrimEnd('…') + ":", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
         searchHost.Children.Add(_search);
         DockPanel.SetDock(searchHost, Dock.Left);
         bar.Children.Add(searchHost);

@@ -213,12 +213,13 @@ internal sealed class SettingsWindow : PdmWindow
     {
         UpdateRegStatus();
         _origins.Text = string.Join(Environment.NewLine, _s.ExtraAllowedOrigins);
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 10) };
+        // Wraps when the translated captions do not fit on one line.
+        var buttons = new WrapPanel { Margin = new Thickness(0, 6, 0, 4) };
         var reg = Ui.Button(Loc.T("Reregister"), (_, _) => { _app.ReRegister(); _regStatus.Text = "…"; Dispatcher.BeginInvoke(UpdateRegStatus, System.Windows.Threading.DispatcherPriority.ApplicationIdle); });
-        reg.Margin = new Thickness(0);
         buttons.Children.Add(reg);
         buttons.Children.Add(Ui.Button(Loc.T("OpenExtFolder"), (_, _) => PdmApp.OpenPath(PdmApp.ExtensionDir)));
         buttons.Children.Add(Ui.Button(Loc.T("HowToInstallExt"), (_, _) => new ExtensionGuideWindow { Owner = this }.ShowDialog()));
+        foreach (Button b in buttons.Children) b.Margin = new Thickness(0, 0, 6, 6);
         var id = new TextBox { Text = ExtensionInfo.Id, IsReadOnly = true, FontFamily = new System.Windows.Media.FontFamily("Consolas"), Padding = new Thickness(4) };
         return Panel(Ui.Field(Loc.T("BrowserStatus"), _regStatus, 160), buttons, Ui.Field("ID", id, 160), _dialog, _cookies,
             Ui.Text("chrome-extension://…/ (dev)", 12, brush: Theme.SubFg), _origins);
@@ -243,9 +244,9 @@ internal sealed class SettingsWindow : PdmWindow
         _container.SelectedItem = _container.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string)i.Tag == _s.PreferredContainer) ?? _container.Items[0];
         UpdateToolStatus();
         var buttons = new StackPanel { Orientation = Orientation.Horizontal };
-        var install = Ui.Button(Loc.T("UpdateTools"), (_, _) => _ = InstallToolsAsync());
-        install.Margin = new Thickness(0);
-        buttons.Children.Add(install);
+        _installTools.Click += (_, _) => _ = InstallToolsAsync();
+        _installTools.Margin = new Thickness(0);
+        buttons.Children.Add(_installTools);
         buttons.Children.Add(Ui.Button(Loc.T("RemoveTools"), (_, _) => { _app.Manager.Tools.Uninstall(); UpdateToolStatus(); }));
         buttons.Children.Add(Ui.Button(Loc.T("OpenFolder"), (_, _) => PdmApp.OpenPath(AppPaths.ToolsDir)));
         return Panel(
@@ -255,9 +256,12 @@ internal sealed class SettingsWindow : PdmWindow
             Ui.Text(Loc.T("LegalNote"), 12, brush: Theme.SubFg, wrap: true));
     }
 
+    private readonly Button _installTools = Ui.Button("");
+
     private async void UpdateToolStatus()
     {
         var t = _app.Manager.Tools;
+        _installTools.Content = Loc.T(t.HasYtDlp && t.HasFfmpeg ? "UpdateTools" : "Install");
         var ffmpeg = "FFmpeg: " + (t.HasFfmpeg ? Loc.T("Installed") : Loc.T("NotInstalled"));
         string Deno(string? v) => "Deno: " + (t.HasDeno ? Loc.T("Installed") + (v != null ? $" ({v})" : "") : Loc.T("NotInstalled"));
         _toolStatus.Text = "yt-dlp: " + (t.HasYtDlp ? Loc.T("Installed") : Loc.T("NotInstalled")) + "\n" + ffmpeg + "\n" + Deno(null);

@@ -386,8 +386,13 @@ internal sealed class AddDownloadWindow : PdmWindow
         catch (Exception ex)
         {
             if (cts != _probeCts) return;
-            var reason = ex is HttpRequestException h && h.StatusCode is { } sc ? Loc.ErrorText("http:" + ((int)sc).ToString(CultureInfo.InvariantCulture))
-                : ex is OperationCanceledException ? "timeout" : ex.GetType().Name;
+            var reason = ex switch
+            {
+                HttpRequestException { StatusCode: { } sc } => Loc.ErrorText("http:" + ((int)sc).ToString(CultureInfo.InvariantCulture)),
+                HttpRequestException => Loc.T("Unreachable"), // no answer: name not found, refused, TLS failure …
+                OperationCanceledException => Loc.T("ProbeTimeout"),
+                _ => ex.Message,
+            };
             _info.Text = Loc.F("ProbeFailed", reason);
             if (ex is HttpRequestException { StatusCode: System.Net.HttpStatusCode.Unauthorized })
             {

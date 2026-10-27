@@ -356,7 +356,7 @@ public static partial class Loc
         ["SetupIntro"] = "PDM verrà installato solo per il tuo utente (non servono diritti di amministratore).",
         ["SetupLocation"] = "Percorso di installazione",
         ["SetupDesktop"] = "Crea un collegamento sul desktop",
-        ["SetupOpera"] = "Configura l'integrazione con il browser (Opera, Chrome, Edge)",
+        ["SetupOpera"] = "Configura l'integrazione con il browser (Opera, Chrome, Edge, Firefox)",
         ["SetupInstall"] = "Installa",
         ["SetupDone"] = "Installazione completata.",
         ["SetupLaunch"] = "Avvia PDM",

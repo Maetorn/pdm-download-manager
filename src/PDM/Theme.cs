@@ -47,7 +47,8 @@ internal static class Theme
         }
 
         r[typeof(Window)] = Style(typeof(Window), (Control.BackgroundProperty, Bg), (Control.ForegroundProperty, Fg));
-        r[typeof(TextBlock)] = Style(typeof(TextBlock), (TextBlock.ForegroundProperty, Fg));
+        // No implicit TextBlock style: it would also reach the text inside dropdowns and tab headers (whose Windows
+        // chrome stays light) and make it light-on-light in the dark theme. Text inherits the window's colour instead.
         r[typeof(Label)] = Style(typeof(Label), (Control.ForegroundProperty, Fg));
         r[typeof(CheckBox)] = Style(typeof(CheckBox), (Control.ForegroundProperty, Fg));
         r[typeof(RadioButton)] = Style(typeof(RadioButton), (Control.ForegroundProperty, Fg));
@@ -88,6 +89,14 @@ internal static class Theme
             var comboItem = Style(typeof(ComboBoxItem));
             comboItem.Setters.Add(new Setter(Control.ForegroundProperty, Brushes.Black));
             r[typeof(ComboBoxItem)] = comboItem;
+            // Tab headers keep the light Windows look too: dark caption text. Only the caption: a TabItem's own
+            // Foreground would also reach the page under it.
+            var caption = new FrameworkElementFactory(typeof(TextBlock));
+            caption.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding());
+            caption.SetValue(TextBlock.ForegroundProperty, Brushes.Black);
+            var tab = Style(typeof(TabItem));
+            tab.Setters.Add(new Setter(HeaderedContentControl.HeaderTemplateProperty, new DataTemplate { VisualTree = caption }));
+            r[typeof(TabItem)] = tab;
         }
     }
 

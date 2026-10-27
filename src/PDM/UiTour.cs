@@ -86,6 +86,13 @@ internal static class UiTour
 
         app.ShowMain();
         await Shot(app.Main, "main");
+        ContextMenu? opened = null;
+        EventManager.RegisterClassHandler(typeof(ContextMenu), ContextMenu.OpenedEvent, new RoutedEventHandler((s, _) => opened = (ContextMenu)s));
+        var grid = Descendants(app.Main).OfType<DataGrid>().First();
+        grid.SelectedItem = paused;
+        await Menu(() => { grid.ContextMenu!.PlacementTarget = grid; grid.ContextMenu.IsOpen = true; }, () => opened, "menu-list");
+        var more = Descendants(app.Main).OfType<Button>().Last(b => b.ToolTip as string == Loc.T("More"));
+        await Menu(() => typeof(MainWindow).GetMethod("ShowMoreMenu", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(app.Main, [more]), () => opened, "menu-more");
         app.Main.Hide();
 
         var add = new AddDownloadWindow(app, new AddRequest { Url = "https://download.example.org/files/sample-archive.zip" });
@@ -156,6 +163,17 @@ internal static class UiTour
         await Idle();
     }
 
+    private static async Task Menu(Action open, Func<ContextMenu?> current, string name)
+    {
+        open();
+        await Task.Delay(400);
+        await Idle();
+        if (current() is not { IsOpen: true } menu) { Report.AppendLine(name + "\tNO MENU"); return; }
+        Capture(menu, menu.Background, name, "(menu)");
+        menu.IsOpen = false;
+        await Idle();
+    }
+
     private static async Task Shot(Window w, string name, int waitMs = 500)
     {
         await Idle();
@@ -169,17 +187,22 @@ internal static class UiTour
     private static void Capture(Window w, string name)
     {
         w.UpdateLayout();
-        var file = Path.Combine(_dir, $"{++_n:00}-{name}.png");
         if (w.Content is not FrameworkElement root || root.ActualWidth < 1) { Report.AppendLine(name + "\tEMPTY"); return; }
+        Capture(root, w.Background, name, w.Title);
+    }
+
+    private static void Capture(FrameworkElement root, Brush? background, string name, string title)
+    {
+        var file = Path.Combine(_dir, $"{++_n:00}-{name}.png");
         CheckFit(root, name);
-        var dpi = VisualTreeHelper.GetDpi(w);
+        var dpi = VisualTreeHelper.GetDpi(root);
         var size = new Size(root.ActualWidth, root.ActualHeight);
         var rtb = new RenderTargetBitmap((int)Math.Ceiling(size.Width * dpi.DpiScaleX), (int)Math.Ceiling(size.Height * dpi.DpiScaleY),
             dpi.PixelsPerInchX, dpi.PixelsPerInchY, PixelFormats.Pbgra32);
         var dv = new DrawingVisual();
         using (var dc = dv.RenderOpen())
         {
-            dc.DrawRectangle(w.Background, null, new Rect(size));
+            dc.DrawRectangle(background, null, new Rect(size));
             dc.DrawRectangle(new VisualBrush(root) { Stretch = Stretch.None, AlignmentX = AlignmentX.Left, AlignmentY = AlignmentY.Top }, null, new Rect(size));
         }
         rtb.Render(dv);
@@ -187,7 +210,7 @@ internal static class UiTour
         png.Frames.Add(BitmapFrame.Create(rtb));
         using var fs = File.Create(file);
         png.Save(fs);
-        Report.AppendLine($"{name}\tWINDOW\t{w.Title}");
+        Report.AppendLine($"{name}\tWINDOW\t{title}");
     }
 
     /// <summary>Lists every visible text that is cut: wider than its own box, or outside a parent's visible area.</summary>
@@ -202,15 +225,18 @@ internal static class UiTour
             if (tb.TextWrapping == TextWrapping.NoWrap)
             {
                 var ft = new FormattedText(tb.Text, CultureInfo.CurrentUICulture, tb.FlowDirection,
-                    new Typeface(tb.FontFamily, tb.FontStyle, tb.FontWeight, tb.FontStretch), tb.FontSize, Brushes.Black, ppd);
+                    new Typeface(tb.FontFamily, tb.FontStyle, tb.FontWeight, tb.FontStretch), tb.FontSize, Brushes.Black,
+                    null, TextOptions.GetTextFormattingMode(tb), ppd);
                 var need = ft.WidthIncludingTrailingWhitespace + tb.Padding.Left + tb.Padding.Right;
                 if (need > tb.ActualWidth + 1) Report.AppendLine($"{name}\tCUT\t{need:0}>{tb.ActualWidth:0}\t{text}");
             }
             // Parents that clip (fixed-width buttons, grid columns, the window itself).
             var scrolled = false; // past a scroll viewer, text below the visible part is only scrolled away
-            foreach (var a in Ancestors(tb).OfType<FrameworkElement>())
+            // The text block itself first: a label wider than its grid column is clipped at the column's edge.
+            foreach (var a in Ancestors(tb).Prepend(tb).OfType<FrameworkElement>())
             {
-                var clip = LayoutInformation.GetLayoutClip(a)?.Bounds ?? (a == root ? new Rect(0, 0, root.ActualWidth, root.ActualHeight) : Rect.Empty);
+                var clip = LayoutInformation.GetLayoutClip(a)?.Bounds
+                    ?? (a == root || a.ClipToBounds ? new Rect(0, 0, a.ActualWidth, a.ActualHeight) : Rect.Empty);
                 if (clip.IsEmpty) { if (a == root) break; continue; }
                 var box = tb.TransformToAncestor(a).TransformBounds(new Rect(tb.RenderSize));
                 var vertical = !scrolled && a is not ScrollContentPresenter && (box.Bottom > clip.Bottom + 1 || box.Top < clip.Top - 1);
