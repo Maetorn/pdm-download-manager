@@ -65,6 +65,10 @@ internal sealed class PdmApp : Application
         TaskScheduler.UnobservedTaskException += (_, ex) => { Log.Error("Unobserved task", ex.Exception); ex.SetObserved(); };
 
         Settings = Store.LoadSettings();
+#if UI_TOUR
+        var tour = UiTour.Requested(_startArgs, out var tourDir, out var tourLang, out var tourTheme);
+        if (tour) (Settings.Language, Settings.Theme) = (tourLang, tourTheme);
+#endif
         NetConfig.Configure(Settings);
         Loc.Init(Settings.Language);
         try { Theme.Apply(this, Settings.Theme); }
@@ -104,6 +108,9 @@ internal sealed class PdmApp : Application
         Updates.Start();
         if (_startArgs.Contains("--updated", StringComparer.OrdinalIgnoreCase))
             Tray.Balloon("PDM", Loc.F("UpdDone", AppPaths.Version), System.Windows.Forms.ToolTipIcon.Info);
+#if UI_TOUR
+        if (tour) _ = UiTour.RunAsync(this, tourDir);
+#endif
     }
 
     // ---------------- browser bridge ----------------

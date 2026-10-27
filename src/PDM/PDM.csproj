@@ -15,7 +15,7 @@
     <Version>1.0.0</Version>
     <Product>PDM Download Manager</Product>
     <Company>PDM</Company>
-    <Copyright>Personal use</Copyright>
+    <Copyright>Copyright (c) 2026 Maetorn. MIT License.</Copyright>
     <SatelliteResourceLanguages>en;tr;de;fr;it</SatelliteResourceLanguages>
     <!-- DPI awareness is set in app.manifest for WPF; the WinForms analyzer only covers WinForms apps. -->
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
@@ -23,6 +23,8 @@
     <!-- Low memory: no background GC thread; the heap stays small (a download manager allocates little). -->
     <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
     <ServerGarbageCollector>false</ServerGarbageCollector>
+    <!-- Test build only (CI "ui-tour"): adds UiTour.cs, which screenshots every window. Never set for releases. -->
+    <DefineConstants Condition="'$(UiTour)' == 'true'">$(DefineConstants);UI_TOUR</DefineConstants>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">

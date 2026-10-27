@@ -1,0 +1,60 @@
+# Opens every window of a test build (UiTour.cs, never part of a release) in every language and theme on a Windows
+# runner, saves a screenshot of each and a list of text that does not fit (clipped.txt), and pushes them to the
+# "ui-tour-results" branch for review. Runs by hand, and on pushes to work branches that change the app's UI.
+name: ui-tour
+
+on:
+  workflow_dispatch:
+  push:
+    branches-ignore: [main, ui-tour-results]
+    paths: ['src/PDM/**', '.github/workflows/ui-tour.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  tour:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write # only to push the screenshots branch below
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build the test app
+        run: dotnet build src/PDM/PDM.csproj -c Release -p:UiTour=true -o tour-bin
+
+      - name: Open every window
+        shell: pwsh
+        run: |
+          $out = Join-Path $PWD 'tour-out'
+          foreach ($theme in 'Light', 'Dark') {
+            foreach ($lang in 'en', 'de', 'fr', 'it', 'tr') {
+              $dir = Join-Path $out "$lang-$theme"
+              New-Item -ItemType Directory -Force $dir | Out-Null
+              $p = Start-Process (Resolve-Path 'tour-bin/PDM.exe') -ArgumentList '--ui-tour', $dir, $lang, $theme -PassThru
+              if (-not $p.WaitForExit(240000)) { $p.Kill(); 'TIMEOUT' | Out-File -Append (Join-Path $dir 'clipped.txt') }
+              Write-Host "$lang-$theme : $((Get-ChildItem $dir -Filter *.png).Count) screenshots"
+            }
+          }
+          $log = Join-Path $env:LOCALAPPDATA 'PDM\logs'
+          if (Test-Path $log) { Copy-Item -Recurse $log (Join-Path $out 'logs') }
+
+      - name: Push screenshots to the ui-tour-results branch
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          Set-Location tour-out
+          git init -q -b ui-tour-results
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -q -m "UI tour of $env:GITHUB_SHA"
+          git push -q -f "https://x-access-token:$env:GH_TOKEN@github.com/$env:GITHUB_REPOSITORY.git" ui-tour-results
