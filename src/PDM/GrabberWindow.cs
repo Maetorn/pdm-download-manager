@@ -16,7 +16,7 @@ internal sealed class GrabberWindow : PdmWindow
 {
     private readonly PdmApp _app;
     private readonly TextBox _url = new() { Padding = new Thickness(4) };
-    private readonly ComboBox _depth = new() { Width = 220, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly ComboBox _depth = new() { MinWidth = 220, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly CheckBox _sameSite;
     private readonly TextBox _types = new() { Padding = new Thickness(4) };
     private readonly TextBox _maxPages = new() { Width = 90, Padding = new Thickness(4), HorizontalAlignment = HorizontalAlignment.Left, Text = "200" };

@@ -24,7 +24,7 @@ internal sealed class AddDownloadWindow : PdmWindow
     private readonly TextBox _url = new() { Padding = new Thickness(4) };
     private readonly TextBox _name = new() { Padding = new Thickness(4) };
     private readonly TextBox _folder = new() { Padding = new Thickness(4) };
-    private readonly ComboBox _connections = new() { Width = 70, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly ComboBox _connections = new() { MinWidth = 70, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly TextBox _sha = new() { Padding = new Thickness(4), FontFamily = new System.Windows.Media.FontFamily("Consolas") };
     private readonly TextBox _referrer = new() { Padding = new Thickness(4) };
     private readonly TextBlock _info = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
@@ -33,7 +33,7 @@ internal sealed class AddDownloadWindow : PdmWindow
     private readonly DispatcherTimer _debounce = new() { Interval = TimeSpan.FromMilliseconds(600) };
     private readonly ListBox _list = new() { Height = 260 };
     private readonly TextBox _filter = new() { Padding = new Thickness(4) };
-    private readonly ComboBox _queue = new() { Width = 220, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly ComboBox _queue = new() { MinWidth = 220, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly TextBlock _checkStatus = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 4) };
     private readonly Dictionary<CheckBox, string> _rowText = new();
     private CancellationTokenSource? _checkCts;

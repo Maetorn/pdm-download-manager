@@ -19,8 +19,8 @@ internal sealed class SettingsWindow : PdmWindow
     private readonly AppSettings _s;
 
     // general
-    private readonly ComboBox _lang = new() { Width = 160, HorizontalAlignment = HorizontalAlignment.Left };
-    private readonly ComboBox _theme = new() { Width = 160, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly ComboBox _lang = new() { MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly ComboBox _theme = new() { MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly CheckBox _startWin, _tray, _notify, _clip, _progressWin, _completeWin, _preventSleep, _autoRetry;
     // files
     private readonly TextBox _folder = new() { Padding = new Thickness(4) };
@@ -28,7 +28,7 @@ internal sealed class SettingsWindow : PdmWindow
     // connection
     private readonly TextBox _conns = Num(), _maxConc = Num(), _limit = Num(), _retries = Num(), _timeout = Num();
     private readonly TextBox _ua = new() { Padding = new Thickness(4) };
-    private readonly ComboBox _proxyMode = new() { Width = 220, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly ComboBox _proxyMode = new() { MinWidth = 220, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly TextBox _proxyAddr = new() { Padding = new Thickness(4) };
     private readonly TextBox _proxyUser = new() { Padding = new Thickness(4) };
     private readonly PasswordBox _proxyPass = new() { Padding = new Thickness(4) };
@@ -42,8 +42,8 @@ internal sealed class SettingsWindow : PdmWindow
     // security
     private readonly CheckBox _scan, _warnExe;
     // video
-    private readonly ComboBox _quality = new() { Width = 160, HorizontalAlignment = HorizontalAlignment.Left };
-    private readonly ComboBox _container = new() { Width = 160, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly ComboBox _quality = new() { MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly ComboBox _container = new() { MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly TextBlock _toolStatus = new() { TextWrapping = TextWrapping.Wrap };
     private readonly ProgressBar _toolProgress = new() { Height = 8, Maximum = 100, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 6, 0, 6) };
 

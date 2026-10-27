@@ -21,7 +21,7 @@ internal sealed class SchedulerWindow : PdmWindow
     private readonly CheckBox _stopEnable;
     private readonly TextBox _start = new() { Width = 80, Padding = new Thickness(4), HorizontalAlignment = HorizontalAlignment.Left };
     private readonly TextBox _stop = new() { Width = 80, Padding = new Thickness(4), HorizontalAlignment = HorizontalAlignment.Left };
-    private readonly ComboBox _after = new() { Width = 240, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly ComboBox _after = new() { MinWidth = 240, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly ComboBox _parallel = new() { MinWidth = 140, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly CheckBox[] _days = new CheckBox[7];
     private readonly Button _rename;

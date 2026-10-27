@@ -222,6 +222,8 @@ internal static class UiTour
             if (!tb.IsVisible || tb.ActualWidth <= 0 || string.IsNullOrWhiteSpace(tb.Text)) continue;
             if (Ancestors(tb).Any(a => a is DataGridRow)) continue; // list rows: long file names are trimmed on purpose
             var text = tb.Text.Replace('\n', ' ');
+            if (tb.Foreground is SolidColorBrush fg && Background(tb) is { } bg && Contrast(fg.Color, bg) < 3.0)
+                Report.AppendLine($"{name}\tLOW CONTRAST\t{fg.Color} on {bg} ({Contrast(fg.Color, bg):0.0}:1)\t{text}");
             if (tb.TextWrapping == TextWrapping.NoWrap)
             {
                 var ft = new FormattedText(tb.Text, CultureInfo.CurrentUICulture, tb.FlowDirection,
@@ -249,6 +251,30 @@ internal static class UiTour
                 if (a == root) break;
             }
         }
+    }
+
+    /// <summary>The colour behind an element: the first opaque background up the tree (a gradient counts as its first stop).</summary>
+    private static Color? Background(DependencyObject d)
+    {
+        for (var p = VisualTreeHelper.GetParent(d); p != null; p = VisualTreeHelper.GetParent(p))
+        {
+            var b = p switch { Panel x => x.Background, Border x => x.Background, Control x => x.Background, _ => null };
+            var c = b switch { SolidColorBrush s => s.Color, GradientBrush g when g.GradientStops.Count > 0 => g.GradientStops[0].Color, _ => (Color?)null };
+            if (c is { A: > 200 }) return c;
+        }
+        return null;
+    }
+
+    /// <summary>WCAG contrast ratio (1 … 21).</summary>
+    private static double Contrast(Color a, Color b)
+    {
+        static double L(Color c)
+        {
+            static double Ch(byte v) { var x = v / 255.0; return x <= 0.03928 ? x / 12.92 : Math.Pow((x + 0.055) / 1.055, 2.4); }
+            return 0.2126 * Ch(c.R) + 0.7152 * Ch(c.G) + 0.0722 * Ch(c.B);
+        }
+        var (l1, l2) = (L(a), L(b));
+        return (Math.Max(l1, l2) + 0.05) / (Math.Min(l1, l2) + 0.05);
     }
 
     private static IEnumerable<DependencyObject> Descendants(DependencyObject d)

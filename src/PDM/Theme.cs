@@ -53,6 +53,7 @@ internal static class Theme
         r[typeof(CheckBox)] = Style(typeof(CheckBox), (Control.ForegroundProperty, Fg));
         r[typeof(RadioButton)] = Style(typeof(RadioButton), (Control.ForegroundProperty, Fg));
         r[typeof(GroupBox)] = Style(typeof(GroupBox), (Control.ForegroundProperty, Fg), (Control.BorderBrushProperty, Border));
+        r[typeof(Expander)] = Style(typeof(Expander), (Control.ForegroundProperty, Fg)); // Windows' own style makes it black
         r[typeof(TextBox)] = Style(typeof(TextBox), (Control.BackgroundProperty, Input), (Control.ForegroundProperty, Fg), (Control.BorderBrushProperty, Border), (TextBox.CaretBrushProperty, Fg));
         r[typeof(PasswordBox)] = Style(typeof(PasswordBox), (Control.BackgroundProperty, Input), (Control.ForegroundProperty, Fg), (Control.BorderBrushProperty, Border), (PasswordBox.CaretBrushProperty, Fg));
         r[typeof(ListBox)] = Style(typeof(ListBox), (Control.BackgroundProperty, Input), (Control.ForegroundProperty, Fg), (Control.BorderBrushProperty, Border));
@@ -94,7 +95,8 @@ internal static class Theme
             var caption = new FrameworkElementFactory(typeof(TextBlock));
             caption.SetBinding(TextBlock.TextProperty, new System.Windows.Data.Binding());
             caption.SetValue(TextBlock.ForegroundProperty, Brushes.Black);
-            var tab = Style(typeof(TabItem));
+            // The page under a tab inherits the TabItem's colour (Windows' own tab style makes it black): light text there.
+            var tab = Style(typeof(TabItem), (Control.ForegroundProperty, Fg));
             tab.Setters.Add(new Setter(HeaderedContentControl.HeaderTemplateProperty, new DataTemplate { VisualTree = caption }));
             r[typeof(TabItem)] = tab;
         }
