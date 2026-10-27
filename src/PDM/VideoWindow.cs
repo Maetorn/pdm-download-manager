@@ -24,8 +24,8 @@ internal sealed class VideoWindow : PdmWindow
     private readonly TextBox _page = new() { Padding = new Thickness(4) };
     private readonly TextBox _title = new() { Padding = new Thickness(4) };
     private readonly ListBox _media = new() { MaxHeight = 150 };
-    private readonly ComboBox _quality = new() { Width = 220, HorizontalAlignment = HorizontalAlignment.Left };
-    private readonly ComboBox _container = new() { Width = 120, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly ComboBox _quality = new() { MinWidth = 220, HorizontalAlignment = HorizontalAlignment.Left };
+    private readonly ComboBox _container = new() { MinWidth = 120, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly CheckBox _audio, _subs, _playlist;
     private readonly TextBox _folder = new() { Padding = new Thickness(4) };
     private readonly TextBlock _info = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };

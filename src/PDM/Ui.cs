@@ -75,7 +75,9 @@ internal static class Ui
         var g = new Grid { Margin = new Thickness(0, 4, 0, 4) };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(labelWidth) });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var t = Text(label);
+        // A translated label longer than its column wraps onto a second line instead of running under the control.
+        var t = Text(label, wrap: true);
+        t.Margin = new Thickness(0, 0, 8, 0);
         g.Children.Add(t);
         Grid.SetColumn(control, 1);
         g.Children.Add(control);

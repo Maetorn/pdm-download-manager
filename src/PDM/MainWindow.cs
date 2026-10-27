@@ -58,11 +58,12 @@ internal sealed partial class MainWindow : PdmWindow
         var root = new DockPanel();
 
         // ---- toolbar ----
-        var toolbar = new DockPanel { LastChildFill = false };
+        var toolbar = new DockPanel();
         var tbBorder = new Border { Child = toolbar, Padding = new Thickness(6, 4, 6, 4), BorderThickness = new Thickness(0, 0, 0, 1) };
         tbBorder.SetResourceReference(Border.BackgroundProperty, Theme.Panel);
         tbBorder.SetResourceReference(Border.BorderBrushProperty, Theme.Border);
-        var tools = new StackPanel { Orientation = Orientation.Horizontal };
+        // Long captions (German, French …) or a narrow window: the buttons wrap into a second row instead of being cut.
+        var tools = new WrapPanel { Orientation = Orientation.Horizontal };
         tools.Children.Add(Ui.ToolButton("", Loc.T("Add"), (_, _) => AddNew()));
         tools.Children.Add(Ui.ToolButton("", Loc.T("Resume"), (_, _) => ForSelected(i => _m.Resume(i))));
         tools.Children.Add(Ui.ToolButton("", Loc.T("Pause"), (_, _) => ForSelected(i => _m.Pause(i))));
@@ -78,8 +79,6 @@ internal sealed partial class MainWindow : PdmWindow
         tools.Children.Add(Ui.ToolButton("", Loc.T("Settings"), (_, _) => new SettingsWindow(_app) { Owner = this }.ShowDialog()));
         tools.Children.Add(Ui.ToolButton("\uE916", Loc.T("SpeedLimitToggle"), (_, _) => _app.ToggleSpeedLimit()));
         tools.Children.Add(Ui.ToolButton("\uE712", Loc.T("More"), (s, _) => ShowMoreMenu((Button)s)));
-        DockPanel.SetDock(tools, Dock.Left);
-        toolbar.Children.Add(tools);
 
         _search = new TextBox { Width = 220, VerticalAlignment = VerticalAlignment.Center, Padding = new Thickness(4, 3, 4, 3), ToolTip = Loc.T("Search") };
         var searchHost = new Grid { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 4, 0) };
@@ -95,7 +94,8 @@ internal sealed partial class MainWindow : PdmWindow
             UpdateEmpty();
         };
         DockPanel.SetDock(searchHost, Dock.Right);
-        toolbar.Children.Add(searchHost);
+        toolbar.Children.Add(searchHost); // docked first: it keeps its place, the buttons get the rest
+        toolbar.Children.Add(tools);
         DockPanel.SetDock(tbBorder, Dock.Top);
         root.Children.Add(tbBorder);
 
@@ -220,9 +220,8 @@ internal sealed partial class MainWindow : PdmWindow
         VirtualizingPanel.SetVirtualizationMode(g, VirtualizationMode.Recycling);
 
         // Name with shell icon
-        var nameCol = new DataGridTemplateColumn { Header = Loc.T("ColName"), Width = new DataGridLength(1, DataGridLengthUnitType.Star), SortMemberPath = nameof(DownloadItem.FileName) };
-        var sp = new FrameworkElementFactory(typeof(StackPanel));
-        sp.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+        var nameCol = new DataGridTemplateColumn { Header = Loc.T("ColName"), Width = new DataGridLength(1, DataGridLengthUnitType.Star), MinWidth = 180, SortMemberPath = nameof(DownloadItem.FileName) };
+        var sp = new FrameworkElementFactory(typeof(DockPanel));
         var img = new FrameworkElementFactory(typeof(Image));
         img.SetValue(WidthProperty, 16.0);
         img.SetValue(HeightProperty, 16.0);
@@ -233,11 +232,12 @@ internal sealed partial class MainWindow : PdmWindow
         txt.SetBinding(TextBlock.TextProperty, new Binding(nameof(DownloadItem.FileName)));
         txt.SetValue(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center);
         txt.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
+        txt.SetValue(MarginProperty, new Thickness(0, 0, 8, 0));
         sp.AppendChild(txt);
         nameCol.CellTemplate = new DataTemplate { VisualTree = sp };
         g.Columns.Add(nameCol);
 
-        g.Columns.Add(TextColumn(Loc.T("ColSize"), 90, nameof(DownloadItem.TotalBytes), v => v is long l ? Ui.Size(l) : ""));
+        g.Columns.Add(TextColumn(Loc.T("ColSize"), 80, nameof(DownloadItem.TotalBytes), v => v is long l ? Ui.Size(l) : ""));
 
         var statusBinding = new MultiBinding { Converter = new FuncMultiConverter(StatusText) };
         statusBinding.Bindings.Add(new Binding(nameof(DownloadItem.Status)));
@@ -245,7 +245,7 @@ internal sealed partial class MainWindow : PdmWindow
         statusBinding.Bindings.Add(new Binding(nameof(DownloadItem.StatusDetail)));
         statusBinding.Bindings.Add(new Binding(nameof(DownloadItem.ActiveConnections)));
         statusBinding.Bindings.Add(new Binding(nameof(DownloadItem.RetryAt)));
-        var statusCol = new DataGridTextColumn { Header = Loc.T("ColStatus"), Width = 170, Binding = statusBinding, SortMemberPath = nameof(DownloadItem.Status) };
+        var statusCol = new DataGridTextColumn { Header = Loc.T("ColStatus"), Width = HeaderFit(Loc.T("ColStatus"), 150), Binding = statusBinding, SortMemberPath = nameof(DownloadItem.Status) };
         var st = new Style(typeof(TextBlock));
         st.Setters.Add(new Setter(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center));
         st.Setters.Add(new Setter(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis));
@@ -259,7 +259,7 @@ internal sealed partial class MainWindow : PdmWindow
         g.Columns.Add(statusCol);
 
         // Progress bar with percentage on top
-        var progCol = new DataGridTemplateColumn { Header = Loc.T("ColProgress"), Width = 140, SortMemberPath = nameof(DownloadItem.Progress) };
+        var progCol = new DataGridTemplateColumn { Header = Loc.T("ColProgress"), Width = HeaderFit(Loc.T("ColProgress"), 120), SortMemberPath = nameof(DownloadItem.Progress) };
         var pg = new FrameworkElementFactory(typeof(Grid));
         pg.SetValue(MarginProperty, new Thickness(2, 4, 6, 4));
         var bar = new FrameworkElementFactory(typeof(ProgressBar));
@@ -275,9 +275,9 @@ internal sealed partial class MainWindow : PdmWindow
         progCol.CellTemplate = new DataTemplate { VisualTree = pg };
         g.Columns.Add(progCol);
 
-        g.Columns.Add(TextColumn(Loc.T("ColSpeed"), 90, nameof(DownloadItem.Speed), v => v is double d ? Ui.Speed(d) : ""));
+        g.Columns.Add(TextColumn(Loc.T("ColSpeed"), 85, nameof(DownloadItem.Speed), v => v is double d ? Ui.Speed(d) : ""));
         g.Columns.Add(TextColumn(Loc.T("ColEta"), 80, nameof(DownloadItem.Eta), v => Ui.Eta(v as TimeSpan?)));
-        g.Columns.Add(TextColumn(Loc.T("ColAdded"), 120, nameof(DownloadItem.CreatedAt), v => v is DateTime t ? t.ToString("g", CultureInfo.CurrentCulture) : ""));
+        g.Columns.Add(TextColumn(Loc.T("ColAdded"), 125, nameof(DownloadItem.CreatedAt), v => v is DateTime t ? t.ToString("g", CultureInfo.CurrentCulture) : ""));
 
         g.ContextMenu = BuildContextMenu();
         g.MouseDoubleClick += (_, e) =>
@@ -295,7 +295,7 @@ internal sealed partial class MainWindow : PdmWindow
     private static DataGridTextColumn TextColumn(string header, double width, string path, Func<object?, object?> convert) => new()
     {
         Header = header,
-        Width = width,
+        Width = HeaderFit(header, width),
         SortMemberPath = path,
         Binding = new Binding(path) { Converter = new FuncConverter(convert) },
         ElementStyle = CenteredText(),
@@ -305,7 +305,16 @@ internal sealed partial class MainWindow : PdmWindow
     {
         var s = new Style(typeof(TextBlock));
         s.Setters.Add(new Setter(TextBlock.VerticalAlignmentProperty, VerticalAlignment.Center));
+        s.Setters.Add(new Setter(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis));
+        s.Setters.Add(new Setter(MarginProperty, new Thickness(0, 0, 6, 0)));
         return s;
+    }
+
+    /// <summary>Column width: <paramref name="width"/>, or wider when the translated header needs it (plus room for the sort arrow).</summary>
+    private static double HeaderFit(string header, double width)
+    {
+        var text = new FormattedText(header, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, new Typeface("Segoe UI"), 13, Brushes.Black, 1.0);
+        return Math.Max(width, Math.Ceiling(text.WidthIncludingTrailingWhitespace) + 22);
     }
 
     private static object StatusText(object?[] v)

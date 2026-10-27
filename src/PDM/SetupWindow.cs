@@ -34,7 +34,7 @@ internal sealed class SetupWindow : PdmWindow
     private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0) };
     private readonly Button _install;
 
-    private SetupWindow()
+    internal SetupWindow()
     {
         Title = Loc.T("SetupTitle");
         Width = 520;
