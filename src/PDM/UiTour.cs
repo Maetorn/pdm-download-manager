@@ -230,7 +230,7 @@ internal static class UiTour
                     new Typeface(tb.FontFamily, tb.FontStyle, tb.FontWeight, tb.FontStretch), tb.FontSize, Brushes.Black,
                     null, TextOptions.GetTextFormattingMode(tb), ppd);
                 var need = ft.WidthIncludingTrailingWhitespace + tb.Padding.Left + tb.Padding.Right;
-                if (need > tb.ActualWidth + 1) Report.AppendLine($"{name}\tCUT\t{need:0}>{tb.ActualWidth:0}\t{text}");
+                if (need > tb.ActualWidth + 2) Report.AppendLine($"{name}\tCUT\t{need:0}>{tb.ActualWidth:0}\t{text}"); // 2 px: layout rounding
             }
             // Parents that clip (fixed-width buttons, grid columns, the window itself).
             var scrolled = false; // past a scroll viewer, text below the visible part is only scrolled away
@@ -258,7 +258,8 @@ internal static class UiTour
     {
         for (var p = VisualTreeHelper.GetParent(d); p != null; p = VisualTreeHelper.GetParent(p))
         {
-            var b = p switch { Panel x => x.Background, Border x => x.Background, Control x => x.Background, _ => null };
+            // A check box's / toggle's Background paints only its little box, not the area behind its text.
+            var b = p switch { ToggleButton => null, Panel x => x.Background, Border x => x.Background, Control x => x.Background, _ => null };
             var c = b switch { SolidColorBrush s => s.Color, GradientBrush g when g.GradientStops.Count > 0 => g.GradientStops[0].Color, _ => (Color?)null };
             if (c is { A: > 200 }) return c;
         }
