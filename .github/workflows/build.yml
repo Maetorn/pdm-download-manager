@@ -1,0 +1,82 @@
+# Builds and tests PDM on a Windows runner. Every run keeps dist\ as an artifact; pushes to main also publish a
+# GitHub release (PDM.exe + PDM.exe.sha256) that the app's automatic updater installs.
+# Only GitHub's/Microsoft's own actions and the preinstalled gh CLI are used (plus Mozilla's web-ext, pinned, to sign
+# the Firefox add-on when an addons.mozilla.org key is configured).
+name: build
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    # Read-only: the build downloads and runs tools (NuGet runtime packs, optional web-ext), so it cannot
+    # change the repository or its releases. Only the small release job below can write.
+    permissions:
+      contents: read
+    env:
+      PDM_VERSION: 1.2.${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build, test, publish (build.ps1)
+        shell: powershell
+        env:
+          # Optional: an addons.mozilla.org API key lets the build sign the Firefox add-on (main pushes only).
+          AMO_JWT_ISSUER: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' && secrets.AMO_JWT_ISSUER || '' }}
+          AMO_JWT_SECRET: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' && secrets.AMO_JWT_SECRET || '' }}
+        run: .\build.ps1 -Version $env:PDM_VERSION
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PDM-windows-x64
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    # Publishes the tested build for the updater (main only). Runs nothing from the repository: it only
+    # downloads the artifact above and calls the preinstalled gh CLI.
+    needs: windows
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      PDM_VERSION: 1.2.${{ github.run_number }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: PDM-windows-x64
+          path: dist
+
+      - name: Publish release for the updater
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NOTES: ${{ github.event.head_commit.message }}
+        run: |
+          $tag = "v$env:PDM_VERSION"
+          # PDM-Setup.exe (same file, starts in setup mode) is for new users; the updater uses PDM.exe + its checksum,
+          # which must match the file being published (the updater refuses anything else).
+          $hash = (Get-FileHash dist/PDM.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          $listed = ((Get-Content dist/PDM.exe.sha256 -Raw).Trim() -split '\s+')[0]
+          if ($hash -ne $listed) { throw "PDM.exe.sha256 does not match PDM.exe" }
+          gh release create $tag dist/PDM-Setup.exe dist/PDM.exe dist/PDM.exe.sha256 --title "PDM $env:PDM_VERSION" --notes "$env:NOTES" --target "$env:GITHUB_SHA"
+          if ($LASTEXITCODE -ne 0) { throw "gh release create failed" }
+          # Keep only the 5 newest releases.
+          $old = gh release list --limit 100 --json tagName,createdAt | ConvertFrom-Json | Sort-Object createdAt -Descending | Select-Object -Skip 5
+          foreach ($r in $old) { gh release delete $r.tagName --yes --cleanup-tag }

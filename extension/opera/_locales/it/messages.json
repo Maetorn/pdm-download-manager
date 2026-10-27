@@ -1,0 +1,149 @@
+{
+  "extName": {
+    "message": "Gestore download PDM"
+  },
+  "extDesc": {
+    "message": "Passa i download del browser a PDM e trova i video nelle pagine."
+  },
+  "menuLink": {
+    "message": "Scarica con PDM"
+  },
+  "menuMedia": {
+    "message": "Scarica questo contenuto con PDM"
+  },
+  "menuAll": {
+    "message": "Scarica tutti i link con PDM…"
+  },
+  "menuSelection": {
+    "message": "Scarica i link selezionati con PDM"
+  },
+  "menuVideo": {
+    "message": "Scarica il video di questa pagina con PDM"
+  },
+  "videoButton": {
+    "message": "Scarica con PDM"
+  },
+  "popupConnected": {
+    "message": "PDM connesso"
+  },
+  "popupNotRunning": {
+    "message": "PDM non è in esecuzione (si avvia quando arriva un download)"
+  },
+  "popupNotInstalled": {
+    "message": "PDM non trovato. Installa PDM e avvialo una volta."
+  },
+  "popupCapture": {
+    "message": "Passa i download a PDM"
+  },
+  "popupSkipNext": {
+    "message": "Lascia il prossimo download al browser"
+  },
+  "popupSkipNextOn": {
+    "message": "Il prossimo download resta nel browser"
+  },
+  "popupMedia": {
+    "message": "Contenuti trovati in questa scheda"
+  },
+  "popupNoMedia": {
+    "message": "Nessun contenuto trovato. Prova ad avviare il video."
+  },
+  "popupOpen": {
+    "message": "Apri PDM"
+  },
+  "popupOptions": {
+    "message": "Opzioni"
+  },
+  "popupVideoPage": {
+    "message": "Scarica il video della pagina (yt-dlp)"
+  },
+  "popupSent": {
+    "message": "Inviato a PDM"
+  },
+  "optTitle": {
+    "message": "Opzioni dell'estensione PDM"
+  },
+  "optCapture": {
+    "message": "Passa automaticamente i download a PDM"
+  },
+  "optExtensions": {
+    "message": "Tipi di file da passare (separati da spazi)"
+  },
+  "optMinSize": {
+    "message": "Dimensione minima (KB, 0 = tutti)"
+  },
+  "optExcluded": {
+    "message": "Siti esclusi (un dominio per riga)"
+  },
+  "optVideoButton": {
+    "message": "Mostra il pulsante «Scarica con PDM» sui video"
+  },
+  "optSendCookies": {
+    "message": "Invia i cookie a PDM per i download che richiedono l'accesso"
+  },
+  "optSave": {
+    "message": "Salva"
+  },
+  "optSaved": {
+    "message": "Salvato ✓"
+  },
+  "optReset": {
+    "message": "Predefiniti"
+  },
+  "optNote": {
+    "message": "Suggerimento: per tenere un download nel browser, usa «Lascia il prossimo download al browser» nel popup. Se PDM non è raggiungibile, il download continua sempre nel browser."
+  },
+  "grabTitle": {
+    "message": "Link nella pagina"
+  },
+  "grabFilter": {
+    "message": "Filtro (es. .zip .pdf o una parola)"
+  },
+  "grabSelectAll": {
+    "message": "Seleziona tutto"
+  },
+  "grabNone": {
+    "message": "Nessuno"
+  },
+  "grabSend": {
+    "message": "Invia selezionati a PDM"
+  },
+  "grabSent": {
+    "message": "$A$ link inviati a PDM",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      }
+    }
+  },
+  "grabNoLinks": {
+    "message": "Nessun link trovato."
+  },
+  "grabCount": {
+    "message": "$A$ / $B$ selezionati",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      },
+      "b": {
+        "content": "$2"
+      }
+    }
+  },
+  "errorPrefix": {
+    "message": "Errore: "
+  },
+  "popupExtOutdated": {
+    "message": "L'estensione è obsoleta (v$A$, PDM ha la v$B$). Ricarica PDM nella pagina delle estensioni del browser; in Firefox: PDM → Impostazioni → Browser → «Aggiungi a Firefox».",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      },
+      "b": {
+        "content": "$2"
+      }
+    }
+  },
+  "videoButtonClose": {
+    "message": "Nascondi per questo video (fino al ricaricamento della pagina)"
+  }
+}

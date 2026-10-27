@@ -1,0 +1,149 @@
+{
+  "extName": {
+    "message": "PDM Download Manager"
+  },
+  "extDesc": {
+    "message": "Hands browser downloads to PDM and finds videos on pages."
+  },
+  "menuLink": {
+    "message": "Download with PDM"
+  },
+  "menuMedia": {
+    "message": "Download this media with PDM"
+  },
+  "menuAll": {
+    "message": "Download all links with PDM…"
+  },
+  "menuSelection": {
+    "message": "Download selected links with PDM"
+  },
+  "menuVideo": {
+    "message": "Download this page's video with PDM"
+  },
+  "videoButton": {
+    "message": "Download with PDM"
+  },
+  "popupConnected": {
+    "message": "PDM connected"
+  },
+  "popupNotRunning": {
+    "message": "PDM is not running (it starts when a download comes)"
+  },
+  "popupNotInstalled": {
+    "message": "PDM not found. Install PDM and run it once."
+  },
+  "popupCapture": {
+    "message": "Hand downloads to PDM"
+  },
+  "popupSkipNext": {
+    "message": "Let the browser handle the next download"
+  },
+  "popupSkipNextOn": {
+    "message": "The next download stays in the browser"
+  },
+  "popupMedia": {
+    "message": "Media found in this tab"
+  },
+  "popupNoMedia": {
+    "message": "No media found yet. Try playing the video."
+  },
+  "popupOpen": {
+    "message": "Open PDM"
+  },
+  "popupOptions": {
+    "message": "Options"
+  },
+  "popupVideoPage": {
+    "message": "Download page video (yt-dlp)"
+  },
+  "popupSent": {
+    "message": "Sent to PDM"
+  },
+  "optTitle": {
+    "message": "PDM extension options"
+  },
+  "optCapture": {
+    "message": "Hand downloads to PDM automatically"
+  },
+  "optExtensions": {
+    "message": "File types to hand over (space separated)"
+  },
+  "optMinSize": {
+    "message": "Minimum size (KB, 0 = all)"
+  },
+  "optExcluded": {
+    "message": "Excluded sites (one domain per line)"
+  },
+  "optVideoButton": {
+    "message": "Show the \"Download with PDM\" button on videos"
+  },
+  "optSendCookies": {
+    "message": "Send cookies to PDM for downloads that need a login"
+  },
+  "optSave": {
+    "message": "Save"
+  },
+  "optSaved": {
+    "message": "Saved ✓"
+  },
+  "optReset": {
+    "message": "Defaults"
+  },
+  "optNote": {
+    "message": "Tip: to keep one download in the browser, use \"Let the browser handle the next download\" in the popup. If PDM cannot be reached, the download always continues in the browser."
+  },
+  "grabTitle": {
+    "message": "Links on the page"
+  },
+  "grabFilter": {
+    "message": "Filter (e.g. .zip .pdf or a word)"
+  },
+  "grabSelectAll": {
+    "message": "Select all"
+  },
+  "grabNone": {
+    "message": "None"
+  },
+  "grabSend": {
+    "message": "Send selected to PDM"
+  },
+  "grabSent": {
+    "message": "$A$ links sent to PDM",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      }
+    }
+  },
+  "grabNoLinks": {
+    "message": "No links found."
+  },
+  "grabCount": {
+    "message": "$A$ / $B$ selected",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      },
+      "b": {
+        "content": "$2"
+      }
+    }
+  },
+  "errorPrefix": {
+    "message": "Error: "
+  },
+  "popupExtOutdated": {
+    "message": "Extension is outdated (v$A$, PDM has v$B$). Reload PDM on the browser's extensions page; in Firefox use PDM → Settings → Browser → \"Add to Firefox\".",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      },
+      "b": {
+        "content": "$2"
+      }
+    }
+  },
+  "videoButtonClose": {
+    "message": "Hide for this video (until the page reloads)"
+  }
+}

@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>PDM</title>
+  <link rel="stylesheet" href="ui.css">
+  <style> body { max-width: 640px; margin: 24px auto; padding: 0 16px; } textarea { min-height: 70px; } .actions { margin-top: 16px; display: flex; gap: 8px; align-items: center; } </style>
+</head>
+<body>
+  <h1 data-i18n="optTitle"></h1>
+  <label><input type="checkbox" id="capture"> <span data-i18n="optCapture"></span></label>
+  <h2 data-i18n="optExtensions"></h2>
+  <textarea id="extensions"></textarea>
+  <h2 data-i18n="optMinSize"></h2>
+  <input type="number" id="minSizeKB" min="0" step="1" style="width:140px">
+  <h2 data-i18n="optExcluded"></h2>
+  <textarea id="excludedSites" placeholder="example.com"></textarea>
+  <label><input type="checkbox" id="videoButton"> <span data-i18n="optVideoButton"></span></label>
+  <label><input type="checkbox" id="sendCookies"> <span data-i18n="optSendCookies"></span></label>
+  <p class="muted" data-i18n="optNote"></p>
+  <div class="actions">
+    <button id="save" class="primary" data-i18n="optSave"></button>
+    <button id="reset" data-i18n="optReset"></button>
+    <span id="saved" class="good"></span>
+  </div>
+  <script src="i18n.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

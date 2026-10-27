@@ -1,0 +1,149 @@
+{
+  "extName": {
+    "message": "PDM Download-Manager"
+  },
+  "extDesc": {
+    "message": "Übergibt Browser-Downloads an PDM und findet Videos auf Seiten."
+  },
+  "menuLink": {
+    "message": "Mit PDM herunterladen"
+  },
+  "menuMedia": {
+    "message": "Dieses Medium mit PDM herunterladen"
+  },
+  "menuAll": {
+    "message": "Alle Links mit PDM herunterladen…"
+  },
+  "menuSelection": {
+    "message": "Ausgewählte Links mit PDM herunterladen"
+  },
+  "menuVideo": {
+    "message": "Video dieser Seite mit PDM herunterladen"
+  },
+  "videoButton": {
+    "message": "Mit PDM herunterladen"
+  },
+  "popupConnected": {
+    "message": "PDM verbunden"
+  },
+  "popupNotRunning": {
+    "message": "PDM läuft nicht (startet, sobald ein Download kommt)"
+  },
+  "popupNotInstalled": {
+    "message": "PDM nicht gefunden. Installieren Sie PDM und starten Sie es einmal."
+  },
+  "popupCapture": {
+    "message": "Downloads an PDM übergeben"
+  },
+  "popupSkipNext": {
+    "message": "Nächsten Download dem Browser überlassen"
+  },
+  "popupSkipNextOn": {
+    "message": "Der nächste Download bleibt im Browser"
+  },
+  "popupMedia": {
+    "message": "In diesem Tab gefundene Medien"
+  },
+  "popupNoMedia": {
+    "message": "Noch keine Medien gefunden. Spielen Sie das Video ab."
+  },
+  "popupOpen": {
+    "message": "PDM öffnen"
+  },
+  "popupOptions": {
+    "message": "Optionen"
+  },
+  "popupVideoPage": {
+    "message": "Video der Seite herunterladen (yt-dlp)"
+  },
+  "popupSent": {
+    "message": "An PDM gesendet"
+  },
+  "optTitle": {
+    "message": "Optionen der PDM-Erweiterung"
+  },
+  "optCapture": {
+    "message": "Downloads automatisch an PDM übergeben"
+  },
+  "optExtensions": {
+    "message": "Zu übergebende Dateitypen (durch Leerzeichen getrennt)"
+  },
+  "optMinSize": {
+    "message": "Mindestgröße (KB, 0 = alle)"
+  },
+  "optExcluded": {
+    "message": "Ausgeschlossene Websites (eine Domain pro Zeile)"
+  },
+  "optVideoButton": {
+    "message": "Schaltfläche „Mit PDM herunterladen“ auf Videos anzeigen"
+  },
+  "optSendCookies": {
+    "message": "Cookies für Downloads mit Anmeldung an PDM senden"
+  },
+  "optSave": {
+    "message": "Speichern"
+  },
+  "optSaved": {
+    "message": "Gespeichert ✓"
+  },
+  "optReset": {
+    "message": "Standard"
+  },
+  "optNote": {
+    "message": "Tipp: Um einen Download im Browser zu behalten, nutzen Sie im Popup „Nächsten Download dem Browser überlassen“. Ist PDM nicht erreichbar, läuft der Download immer im Browser weiter."
+  },
+  "grabTitle": {
+    "message": "Links auf der Seite"
+  },
+  "grabFilter": {
+    "message": "Filter (z. B. .zip .pdf oder ein Wort)"
+  },
+  "grabSelectAll": {
+    "message": "Alle auswählen"
+  },
+  "grabNone": {
+    "message": "Keine"
+  },
+  "grabSend": {
+    "message": "Auswahl an PDM senden"
+  },
+  "grabSent": {
+    "message": "$A$ Links an PDM gesendet",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      }
+    }
+  },
+  "grabNoLinks": {
+    "message": "Keine Links gefunden."
+  },
+  "grabCount": {
+    "message": "$A$ / $B$ ausgewählt",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      },
+      "b": {
+        "content": "$2"
+      }
+    }
+  },
+  "errorPrefix": {
+    "message": "Fehler: "
+  },
+  "popupExtOutdated": {
+    "message": "Die Erweiterung ist veraltet (v$A$, PDM hat v$B$). Laden Sie PDM auf der Erweiterungsseite des Browsers neu; in Firefox: PDM → Einstellungen → Browser → „Zu Firefox hinzufügen“.",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      },
+      "b": {
+        "content": "$2"
+      }
+    }
+  },
+  "videoButtonClose": {
+    "message": "Für dieses Video ausblenden (bis die Seite neu lädt)"
+  }
+}

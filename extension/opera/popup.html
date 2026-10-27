@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="ui.css">
+  <style>
+    body { width: 340px; padding: 12px; }
+    #status { padding: 8px 10px; border-radius: 6px; background: var(--panel); margin-bottom: 10px; }
+    #media { list-style: none; padding: 0; margin: 0; max-height: 220px; overflow: auto; }
+    #media li { display: flex; gap: 6px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--border); }
+    #media li button { padding: 2px 8px; }
+    .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <div id="status" class="muted">…</div>
+  <label><input type="checkbox" id="capture"> <span data-i18n="popupCapture"></span></label>
+  <button id="skip" style="width:100%" data-i18n="popupSkipNext"></button>
+  <h2 data-i18n="popupMedia"></h2>
+  <ul id="media"></ul>
+  <div id="nomedia" class="muted" data-i18n="popupNoMedia"></div>
+  <div class="actions">
+    <button id="videoPage" data-i18n="popupVideoPage"></button>
+    <button id="open" class="primary" data-i18n="popupOpen"></button>
+    <button id="options" data-i18n="popupOptions"></button>
+  </div>
+  <script src="i18n.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>PDM</AssemblyName>
+    <RootNamespace>PDM</RootNamespace>
+    <ApplicationIcon>Assets\pdm.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <StartupObject>PDM.Program</StartupObject>
+    <Version>1.0.0</Version>
+    <Product>PDM Download Manager</Product>
+    <Company>PDM</Company>
+    <Copyright>Personal use</Copyright>
+    <SatelliteResourceLanguages>en;tr;de;fr;it</SatelliteResourceLanguages>
+    <!-- DPI awareness is set in app.manifest for WPF; the WinForms analyzer only covers WinForms apps. -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <!-- Low memory: no background GC thread; the heap stays small (a download manager allocates little). -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <ServerGarbageCollector>false</ServerGarbageCollector>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- Not compressed: Windows then maps the code straight from PDM.exe (shared, paged on demand) instead of
+         unpacking every assembly into private memory at each start. Bigger file, less RAM, faster start. -->
+    <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
+    <!-- PDM's own code is compiled ahead of time, so starting does not spend CPU on the JIT. -->
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PDM.Core\PDM.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\pdm.ico" />
+    <Resource Include="Assets\pdm-active.ico" />
+  </ItemGroup>
+
+  <!-- The native host and the Opera extension travel inside PDM.exe (built by build.ps1). -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\build\host\PDM.NativeHost.exe" LogicalName="PDM.NativeHost.exe" Condition="Exists('..\..\build\host\PDM.NativeHost.exe')" />
+    <EmbeddedResource Include="..\..\build\extension.zip" LogicalName="extension.zip" Condition="Exists('..\..\build\extension.zip')" />
+    <EmbeddedResource Include="..\..\build\firefox.xpi" LogicalName="firefox.xpi" Condition="Exists('..\..\build\firefox.xpi')" />
+  </ItemGroup>
+
+</Project>

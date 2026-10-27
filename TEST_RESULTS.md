@@ -1,0 +1,127 @@
+# Test results
+
+Status legend: **PASS** = run and passed · **COMPILED** = builds, not run · **MANUAL** = not run yet, must be checked by hand on Windows/Opera.
+Nothing below is marked PASS unless it was actually run.
+
+## Automated tests (`tests/PDM.Tests`)
+
+| Where | Result |
+| --- | --- |
+| Windows (earlier session, Core engine/IPC/native host) | **PASS** 31/31 |
+| GitHub Actions `windows-latest`, full `build.ps1` (incl. native host exe tests) | **PASS** 31/31 — run 40471842685, commit a36ecdd |
+| GitHub Actions `windows-latest` after the 14 features (queues, extract, history, proxy, logins, grabber, convert …) | **PASS** 54/54 — run 40501561515 (proxy login 407 and site logins ran here; FFmpeg conversion end-to-end skipped: no FFmpeg on the runner, PASS on Linux) |
+| Cloud (Linux, .NET SDK 10.0.113) | **COMPILED** only — the tests need Windows (DPAPI, pipe ACLs, Attachment Services) |
+
+The first CI run failed 2 pipe tests (29/31): the runner is elevated, and .NET's `CurrentUserOnly` client compares the
+pipe owner with the token's *default owner* (BUILTIN\Administrators when elevated), while the server set the owner to
+the user SID. Fixed in `PipeServer.CreateSecurity` (owner = `WindowsIdentity.Owner`); the next run passed 31/31.
+
+## Build checks done in the cloud (Linux)
+
+| Check | Result |
+| --- | --- |
+| `dotnet build` PDM.Core / PDM.NativeHost / PDM (WPF) / PDM.Tests with `EnableWindowsTargeting=true` | PASS — 0 errors (1 old warning in the tests: unused variable) |
+| `dotnet publish` PDM.NativeHost Release (trimmed, single file) | PASS — no trim warnings, ~11 MB |
+| `dotnet publish` PDM Release with `build/host/PDM.NativeHost.exe` + `build/extension.zip` present | PASS — both resources embedded in PDM.dll |
+| Extension: `node --check` on every .js, manifest.json and _locales JSON parse | PASS |
+| Extension: manifest `key` → ID `dloanbeiidcfnnmdmgpcdhbkenjjangb` | PASS (computed from the key) |
+| `build.ps1` itself | PASS on GitHub Actions `windows-latest` (icons present, host publish, zip, tests, app publish, dist) |
+| Video multi-connection path, end to end on Linux with yt-dlp 2026.10.26 + FFmpeg 6.1 against a local range server: (1) real yt-dlp, progressive mp4 → 4 connections, output byte-identical to the source; (2) yt-dlp-style JSON with separate video/audio → video fetched in 1 MB pieces with the given User-Agent/Referer, FFmpeg merge → h264 + aac, 20 s; (3) HLS format → falls back to yt-dlp's own downloader | PASS (YouTube itself is not reachable from the cloud: MANUAL there) |
+| Feed permalink detection (content.js `permalinkFor`) in jsdom: X timeline, X quoted post, X video link, Reddit, YouTube hover preview, YouTube watch page, Instagram feed, other site | PASS (9/9) |
+| Cookies to yt-dlp on Linux with yt-dlp 2026.10.26: engine path, yt-dlp path and info query all sent the session cookie (9/9 requests), the other site's cookie never, and the cookies files were deleted afterwards | PASS |
+| Video resume on Linux (fake yt-dlp JSON, real FFmpeg, 6 MB/s limit): stopped at 40 %, resumed and stopped during the sound, third run only merged; the server sent ~1.1× the video (pieces cut by the stops), not 1.4× as a restart would; output h264 + aac 20 s, temp folder removed | PASS |
+| New unit tests on Linux: batch pattern `[001-003]`/`[a-c]`/several ranges/descending/cap, auto-retry error classes, disk free space + disk-full code; the rest of the suite unchanged (the 4 Windows-only tests fail on Linux as before: DPAPI, pipe ACL, Windows paths) | PASS (34/38 on Linux; Windows: see CI) |
+| Batch B unit/integration tests on Linux: settings without a version number migrate (category folders on, old scheduler → main queue, old fields not written again); old `inQueue` lists → main queue; a queue limited to 1 download at a time ran 3 downloads one after another (max 1 active) and reported "finished" once; zip extraction (folders, unique target, `..` entry refused, nothing written outside, half-made folder removed); `.tar.gz` via the system tar; history totals per day + reload + clear; export/import (.json round trip, links from text, only http/https, names sanitized) | PASS (41/45 on Linux, the same 4 Windows-only failures; Windows: see CI) |
+| Test harness: the manager tests' SynchronizationContext ran posted work on the thread pool, so two posts could run out of order (seen once in 11 runs: status still "Processing" after "Completed"); it is now one ordered thread like the app's Dispatcher — 10/10 runs clean afterwards | PASS |
+| Batch C tests on Linux: proxy address parsing; downloads through a custom HTTP proxy (the test server acting as the proxy saw the requests, hash OK); link extraction (relative, `<base>`, entities, no `javascript:`/`#`); grabber depth 0/1/2, same site, file types, a file behind a page-like link (`dl.php`); FFmpeg stream info + codec choice; **real FFmpeg 6.1**: VP9/Opus webm → MP4 H.264/AAC (duration kept, progress 100 %), → MP3, no temporary files, existing output not overwritten. Proxy login (407) and site logins (401, Basic only to its own host) need DPAPI → run on Windows CI only | PASS (48/52 on Linux, the same 4 Windows-only failures; Windows: see CI) |
+| YouTube "Requested format is not available" (user report, yt-dlp 2026.10.26): with the browser's YouTube login cookies yt-dlp counts as signed in and uses the `web_embedded / tv_samsung / web` clients, which all need a JavaScript runtime; without one every format is dropped. Without cookies it uses `visionos`, which needs none (read in yt-dlp's source). Fix: YouTube is tried without cookies first, other sites with them, and a failed run is retried once with the other choice. Checked with a stand-in yt-dlp script (YouTube: one run, no cookies; age limit: plain then cookies; Instagram: cookies first); YouTube itself is not reachable from the cloud | PASS (logic) / MANUAL (real YouTube, W45) |
+| Deno for yt-dlp: release assets and checksum format read from the official v2.9.8 release (`deno-x86_64-pc-windows-msvc.zip` + `.zip.sha256sum` in PowerShell Get-FileHash format, CRLF) and used as a test fixture; hash of another file refused; `deno --version` parsing; `--js-runtimes deno:<full path>` placed before `--` (yt-dlp splits the value at the first colon only, so `C:\…` works — read in its source); yt-dlp runs Deno with `--no-prompt --no-remote` and no `--allow-*` permissions. Deno itself could not be downloaded/run in the cloud (GitHub blocked here) | PASS (parsing/arguments) / MANUAL (W47) |
+| Performance changes: engine gathers network reads into one disk write per ≤128 KB (or every 250 ms) and re-arms the stall timer once a second — full suite 5× on Linux, all engine tests (parallel, bounded, drops, pause/resume, chunked, speed limit, 429) pass; on loopback both old and new engine made ~8,300 writes per GB (loopback already reads 128 KB), the gain applies to HTTPS (≤16 KB per read: ~8× fewer writes — reasoning, not measured here). Manager timer no longer wakes the UI when idle. PDM.exe published uncompressed + ReadyToRun on Linux: builds, 188 MB. Native host: NativeAOT (Release build has no AOT warnings; the real AOT exe is built and tested by CI tests 4/4b/4c) | PASS (cloud) / MANUAL (W48–W50) |
+| Firefox add-on logic in Node with stubbed `chrome`/`browser` APIs: Firefox uses `downloads.onCreated` (no onDeterminingFilename), pauses → asks PDM → cancel + erase when PDM took it, resume when not, other types untouched; Chromium still uses onDeterminingFilename only; installed add-on asks PDM to open the new .xpi once, a temporary one reloads; media detection listens to <video>/<object> on all URLs but to XHR only for media-looking addresses | PASS |
+| Security pass: DllImport search limited to System32 (PDM, PDM.Core, native host); SetDllDirectory("") + image-load policy (no remote, no low-integrity, System32 first) applied at start — the whole test suite now runs under it on Windows (flags read back in a test); helper tools in Windows job objects (FFmpeg/tar: one process only, no clipboard/desktop/system settings; all tools end with PDM) — test on Windows: whoami starts without the job and fails inside it, limit reads back as 1, closing the job ends the tool; more dangerous types warned (.msc, .chm, .library-ms, .settingcontent-ms, .xll, .appinstaller …); http(s) addresses inside tool error texts redacted before logging; native host gives the foreground right only to the PDM process at the other end of the pipe; CI build job read-only, a separate release job (main only) publishes and checks the checksum against the file | PASS (Linux parts) / CI (Windows parts) |
+| Public release prep on Linux: new test "Languages" (every app string in en/tr/de/fr/it and every extension string in en/tr/de/fr/it present, same `{0}`/`$A$` placeholders) passes and fails when a key is removed; WPF app compiles with 0 warnings (`EnableWindowsTargeting`); full suite 54 passed, 4 Windows-only failing as before (CombineInside, DPAPI, direct-stream plan path, IPC pipe). The token-free update check against the public GitHub API, the German/French/Italian UI on screen and the extension languages were **not** run here | PASS (as described) |
+| Engine bounded requests (MaxRequestBytes) on Linux against the test server: 9 MB in 1 MB pieces (12 requests, nothing re-downloaded), with connection drops, no-range server, chunked server | PASS |
+
+## Windows app — MANUAL
+
+| # | Check | Status |
+| --- | --- | --- |
+| W1 | `build.ps1` finishes; `dist\PDM.exe`, `dist\PDM-Setup.exe`, `dist\extension\opera` exist | PASS (CI) |
+| W2 | `PDM-Setup.exe`: installs to `%LOCALAPPDATA%\Programs\PDM`, Start menu + desktop shortcut, "Apps & features" entry, no UAC prompt | MANUAL |
+| W3 | First start: tray icon, main window, `%LOCALAPPDATA%\PDM\host` + `extension` created, status bar "Browser bridge ready" | MANUAL |
+| W4 | Second start of PDM.exe brings the running window to front (single instance); `PDM.exe <url>` opens the add dialog in the running instance | MANUAL |
+| W5 | Add dialog: paste a link → size/resumable shown, name from server, Download / Download later, batch mode with filter (paste several links with Ctrl+V) | MANUAL |
+| W6 | Large file with 8–16 connections; pause/resume; close app mid-download and restart → resumes | MANUAL |
+| W7 | Details window: segment bar moves, connection slider changes live, Refresh address, SHA-256 compute/verify | MANUAL |
+| W8 | Categories/counts, search, context menu, Delete/Enter/Ctrl+V/Ctrl+N, drag a link from Opera onto the list | MANUAL |
+| W9 | Completed balloon (click opens folder); opening an .exe asks first | MANUAL |
+| W10 | Clipboard monitor: copy a `.zip` link → balloon → click → add dialog | MANUAL |
+| W11 | Scheduler: start time starts the queue; post-queue sleep/shutdown shows the 60 s countdown and Cancel works | MANUAL |
+| W12 | Settings: every tab saves; theme Light/Dark/System + dark title bar after restart; language EN after restart; "Start with Windows" adds/removes the Run key | MANUAL |
+| W13 | Video window: install tools (progress, SHA-256 verified), get qualities for a YouTube link, download 1080p mp4 / audio only | MANUAL |
+| W14 | Close button hides to tray (if enabled); tray Exit with active downloads asks first | MANUAL |
+| W15 | Uninstall (Settings → About or Apps & features): shortcuts, registry keys and install folder removed; downloaded files kept | MANUAL |
+| W16 | High-DPI / 150 % scaling looks right | MANUAL |
+| W17 | Progress window opens when a single download starts (add dialog "Download", silent browser capture, video); Pause/Resume, Esc only hides it | MANUAL |
+| W18 | "Download complete" window: Open / Open with… / Open folder / Close; "Don't show this window again" turns it off (Settings → General) | MANUAL |
+| W19 | YouTube 1080p mp4 plays in Windows "Movies & TV" without the AV1 extension (H.264 + AAC chosen) | MANUAL |
+| W20 | Progress window: "Hide/Show details", connection table (No. / Downloaded / Info) updates live | MANUAL |
+| W23 | YouTube video: progress window shows several connections (No. 1–8) and the segment map; finished file plays; picture + sound in one file | MANUAL |
+| W24 | Rubber-band selection: drag from an empty part of the list selects the rows the frame touches; Ctrl keeps the previous selection; drag on rows selects a range | MANUAL |
+| W25 | Video button on X/Instagram/Facebook/Reddit/TikTok feeds sends the post's own address (e.g. x.com/user/status/…); the video downloads as mp4 | MANUAL |
+| W26 | Login-only video (e.g. Instagram) downloads with the browser cookies | MANUAL |
+| W27 | Category folders on by default (also for existing settings): zip → Downloads\Compressed, pdf → Documents, mp3 → Music, exe → Programs, mp4 and video-site downloads → Video, audio-only → Music | MANUAL |
+| W28 | Video pause / PDM restart / power cut → continues where it stopped (progress window starts above 0) | MANUAL |
+| W29 | Chrome and Edge: load unpacked from %LOCALAPPDATA%\PDM\extension; downloads, menu, video button work like in Opera; guide window shows a button per installed browser | MANUAL |
+| W21 | Settings → Updates: no token needed; "Check now" finds the newest release, downloads, verifies SHA-256, restarts as the new version | MANUAL |
+| W22 | Automatic update waits until no download is running; after restart the balloon says "PDM was updated to version x.y.z" | MANUAL |
+| W30 | Sleep: while something downloads Windows does not go to sleep (`powercfg /requests` lists PDM); after the last download it can sleep again; off in Settings → General | MANUAL |
+| W31 | Auto retry: unplug the network during a download → error, status shows "retrying at hh:mm"; plug in → it continues at once (or at that time) | MANUAL |
+| W32 | Disk space: a file larger than the free space shows the warning in the add window and fails with "Disk is full" instead of filling the disk | MANUAL |
+| W33 | Duplicate: adding an address already in the list asks Open / Show in the list / Download again / Cancel; in a batch the duplicates are unticked | MANUAL |
+| W34 | Speed limit: toolbar/tray "Speed Limit" switches the global limit on/off; right click → "Speed limit…" and the progress window's "Limit this download" limit one download at once | MANUAL |
+| W35 | Batch pattern: `https://…/img[001-020].jpg` in the add window opens the list with 20 addresses | MANUAL |
+| W36 | Queues: Scheduler → "New queue…", rename, delete (its downloads move to the main queue); each queue's start/stop time, days, "Files at the same time" and after-action are kept; sidebar lists the queues with counts; right click → "Add to queue" moves items; toolbar Start/Stop asks which queue when there are several | MANUAL |
+| W37 | Auto extract (Settings → Files, off by default): a finished .zip, .7z and .rar each extract into a folder next to them, balloon opens it; extracted files carry the Zone.Identifier mark; "Move the archive to the Recycle Bin" works; a damaged/password archive shows "Could not extract" and leaves the archive | MANUAL |
+| W38 | Batch window "Check links": sizes appear, dead links (404, no server) are unticked and red, summary shows working/failed/total size | MANUAL |
+| W39 | More → "Export list…" (.txt and .json) and "Import list…" (both, plus a text with links) open the batch window with the right links/names | MANUAL |
+| W40 | More → "History and statistics": totals, today / 7 / 30 days, 30-day bars with tooltips, search, Open / Open folder / Download again / Delete, clear history, reset statistics | MANUAL |
+| W41 | Proxy (Settings → Connection): "Use this proxy" with an HTTP and a SOCKS5 proxy (and with a login): downloads, video (yt-dlp), tool install and update check all go through it; "No proxy (direct)" connects directly | MANUAL |
+| W42 | Site logins: a site with HTTP Basic (https) or Digest login asks in the add window ("Add login…"), the login is saved (Settings → Site logins) and the download works; other sites never receive it | MANUAL |
+| W43 | More → "Site grabber…": a real site with depth 1, file types "pdf zip": the batch window lists the files with the page they came from as referrer; "Stop" keeps what was found | MANUAL |
+| W44 | Right click a finished video → Convert → MP3 / MP4: progress window, FFmpeg install offered when missing, result appears in the list as finished and the "Download complete" window opens; the MP4 plays in Windows "Movies & TV" | MANUAL |
+| W45 | YouTube while signed in to YouTube in the browser: "Download with PDM" → window opens at once (no automatic analysis), "Save to" shows Downloads\Video (Downloads\Music with "Audio only"), 1080p mp4 downloads; an age-limited video downloads after the automatic second try with cookies | MANUAL |
+| W46 | Add window: the "Save to" folder follows the file type (a .zip shows Downloads\Compressed, a .pdf Downloads\Documents); a folder you pick yourself is kept | MANUAL |
+| W47 | Deno: about 5 minutes after PDM starts (with yt-dlp installed) Settings → Video shows "Deno: Installed (2.x)"; YouTube videos keep downloading (also "made for kids" ones and signed-in/age-limited ones) | MANUAL |
+| W48 | Memory: with no window open and nothing downloading, about 20 s later Task Manager shows PDM's memory drop (working set trimmed); CPU stays at 0 % while idle in the tray | MANUAL |
+| W49 | Fast HTTPS download (e.g. 100+ MB): CPU of PDM lower than v1.1.30-ish for the same file; file hash OK; pause/resume still fine | MANUAL |
+| W50 | PDM.exe (uncompressed, ~188 MB) starts noticeably faster; the auto-update downloads and installs it | MANUAL |
+| W51 | Language: Settings → General lists Automatic, English, Deutsch, Français, Italiano, Türkçe; after restart every window (main, add, progress, settings, scheduler, history, video, setup, uninstall) is in that language; "Automatic" follows the Windows display language (English when it is none of the five); an old settings file with Turkish stays Turkish | MANUAL |
+| W52 | Updates without a token: once the repository is public, Settings → Updates → "Check now" finds the newest release with no token; an old saved token is dropped from settings.json | MANUAL |
+| W53 | Release page has PDM-Setup.exe, PDM.exe and PDM.exe.sha256; PDM-Setup.exe starts in setup mode | MANUAL |
+| O17 | Extension in German/French/Italian browsers shows its menus, popup, options and video button in that language (English otherwise) | MANUAL |
+| F1 | Firefox: Settings → Browser → guide → "Add to Firefox" (signed build: Firefox asks to add; unsigned: about:debugging opens, path copied, temporary load works) | MANUAL |
+| F2 | Firefox: a .zip download is paused, handed to PDM and removed from Firefox's list; with PDM closed the host starts it; with PDM not installed the download continues in Firefox | MANUAL |
+| F3 | Firefox: context menu, video button, popup, "all links" page work as in Opera | MANUAL |
+| F4 | Firefox (signed install): after a PDM update Firefox asks to update the add-on | MANUAL |
+| O15 | After a PDM update the extension reloads itself (new version in opera://extensions) without pressing reload | MANUAL |
+| O16 | Video button "×": hides the button for that video until reload / another page; other videos still show it | MANUAL |
+
+## Opera extension — MANUAL
+
+| # | Check | Status |
+| --- | --- | --- |
+| O1 | Load unpacked from `%LOCALAPPDATA%\PDM\extension`; ID is `dloanbeiidcfnnmdmgpcdhbkenjjangb`; popup says "PDM connected" | MANUAL |
+| O2 | Clicking a `.zip`/`.exe` download in Opera: download disappears from Opera, PDM dialog opens in front | MANUAL |
+| O3 | With PDM closed: the native host starts PDM and the download is handed over | MANUAL |
+| O4 | With PDM uninstalled / host missing: download continues normally in Opera (never lost) | MANUAL |
+| O5 | "Let the browser handle the next download" works once; capture toggle off → icon grey, nothing captured | MANUAL |
+| O6 | Filters: type list, min size, excluded site; blob:/data: and private-window downloads stay in Opera | MANUAL |
+| O7 | Login-only download (cookies) works via PDM | MANUAL |
+| O8 | Context menus: link, image/video/audio, selection links, all links → grabber page → send | MANUAL |
+| O9 | Media detection: badge count on a page with an mp4; popup list → download | MANUAL |
+| O10 | Video button over a `<video>` and on YouTube → PDM video window opens | MANUAL |
+| O11 | Options page saves and is respected | MANUAL |
+| O12 | Video button sits on the video's top-right edge (above it); inside the corner only in fullscreen / when there is no room | MANUAL |
+| O13 | Video button works in embedded players (iframes) on other sites; HLS (.m3u8) entries download via yt-dlp | MANUAL |
+| O14 | No visible slowdown while scrolling / moving the mouse on video-heavy pages | MANUAL |

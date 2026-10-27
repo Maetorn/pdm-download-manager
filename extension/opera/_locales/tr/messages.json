@@ -1,0 +1,149 @@
+{
+  "extName": {
+    "message": "PDM İndirme Yöneticisi"
+  },
+  "extDesc": {
+    "message": "Tarayıcı indirmelerini PDM'ye aktarır, sayfadaki videoları bulur."
+  },
+  "menuLink": {
+    "message": "PDM ile indir"
+  },
+  "menuMedia": {
+    "message": "Bu medyayı PDM ile indir"
+  },
+  "menuAll": {
+    "message": "Tüm bağlantıları PDM ile indir…"
+  },
+  "menuSelection": {
+    "message": "Seçimdeki bağlantıları PDM ile indir"
+  },
+  "menuVideo": {
+    "message": "Bu sayfanın videosunu PDM ile indir"
+  },
+  "videoButton": {
+    "message": "PDM ile indir"
+  },
+  "popupConnected": {
+    "message": "PDM bağlı"
+  },
+  "popupNotRunning": {
+    "message": "PDM çalışmıyor (indirme gelince açılır)"
+  },
+  "popupNotInstalled": {
+    "message": "PDM bulunamadı. PDM'yi kurup bir kez çalıştırın."
+  },
+  "popupCapture": {
+    "message": "İndirmeleri PDM'ye aktar"
+  },
+  "popupSkipNext": {
+    "message": "Sonraki indirmeyi tarayıcı yapsın"
+  },
+  "popupSkipNextOn": {
+    "message": "Sonraki indirme tarayıcıda kalacak"
+  },
+  "popupMedia": {
+    "message": "Bu sekmede bulunan medya"
+  },
+  "popupNoMedia": {
+    "message": "Henüz medya bulunmadı. Videoyu oynatmayı deneyin."
+  },
+  "popupOpen": {
+    "message": "PDM'yi aç"
+  },
+  "popupOptions": {
+    "message": "Seçenekler"
+  },
+  "popupVideoPage": {
+    "message": "Sayfa videosunu indir (yt-dlp)"
+  },
+  "popupSent": {
+    "message": "PDM'ye gönderildi"
+  },
+  "optTitle": {
+    "message": "PDM eklenti seçenekleri"
+  },
+  "optCapture": {
+    "message": "İndirmeleri otomatik olarak PDM'ye aktar"
+  },
+  "optExtensions": {
+    "message": "Aktarılacak dosya türleri (boşlukla ayırın)"
+  },
+  "optMinSize": {
+    "message": "En küçük boyut (KB, 0 = hepsi)"
+  },
+  "optExcluded": {
+    "message": "Hariç tutulan siteler (her satıra bir alan adı)"
+  },
+  "optVideoButton": {
+    "message": "Videoların üzerinde \"PDM ile indir\" düğmesini göster"
+  },
+  "optSendCookies": {
+    "message": "Oturum gerektiren indirmeler için çerezleri PDM'ye gönder"
+  },
+  "optSave": {
+    "message": "Kaydet"
+  },
+  "optSaved": {
+    "message": "Kaydedildi ✓"
+  },
+  "optReset": {
+    "message": "Varsayılanlar"
+  },
+  "optNote": {
+    "message": "İpucu: Bir indirmeyi tarayıcıda tutmak için açılır penceredeki \"Sonraki indirmeyi tarayıcı yapsın\" düğmesini kullanın. PDM'ye ulaşılamazsa indirme her zaman tarayıcıda devam eder."
+  },
+  "grabTitle": {
+    "message": "Sayfadaki bağlantılar"
+  },
+  "grabFilter": {
+    "message": "Filtre (ör. .zip .pdf veya bir kelime)"
+  },
+  "grabSelectAll": {
+    "message": "Tümünü seç"
+  },
+  "grabNone": {
+    "message": "Hiçbiri"
+  },
+  "grabSend": {
+    "message": "Seçilenleri PDM'ye gönder"
+  },
+  "grabSent": {
+    "message": "$A$ bağlantı PDM'ye gönderildi",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      }
+    }
+  },
+  "grabNoLinks": {
+    "message": "Bağlantı bulunamadı."
+  },
+  "grabCount": {
+    "message": "$A$ / $B$ seçili",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      },
+      "b": {
+        "content": "$2"
+      }
+    }
+  },
+  "errorPrefix": {
+    "message": "Hata: "
+  },
+  "popupExtOutdated": {
+    "message": "Eklenti eski (v$A$, PDM'deki v$B$). Tarayıcının eklentiler sayfasında PDM eklentisini yenileyin; Firefox'ta PDM → Ayarlar → Tarayıcı → \"Firefox'a ekle\".",
+    "placeholders": {
+      "a": {
+        "content": "$1"
+      },
+      "b": {
+        "content": "$2"
+      }
+    }
+  },
+  "videoButtonClose": {
+    "message": "Bu video için gizle (sayfa yenilenene kadar)"
+  }
+}

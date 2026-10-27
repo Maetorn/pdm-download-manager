@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>PDM</title>
+  <link rel="stylesheet" href="ui.css">
+  <style>
+    body { max-width: 980px; margin: 20px auto; padding: 0 16px; }
+    #list { list-style: none; padding: 0; margin: 10px 0; border: 1px solid var(--border); border-radius: 6px; max-height: 65vh; overflow: auto; }
+    #list li { padding: 4px 8px; border-bottom: 1px solid var(--border); }
+    #list li label { margin: 0; align-items: center; }
+    .url { color: var(--sub); font-size: 12px; }
+    .bar { display: flex; gap: 8px; align-items: center; }
+  </style>
+</head>
+<body>
+  <h1 data-i18n="grabTitle"></h1>
+  <div id="page" class="muted ellipsis"></div>
+  <div class="bar" style="margin-top:10px">
+    <input type="text" id="filter" class="grow" data-i18n-placeholder="grabFilter">
+    <button id="all" data-i18n="grabSelectAll"></button>
+    <button id="none" data-i18n="grabNone"></button>
+  </div>
+  <ul id="list"></ul>
+  <div class="bar">
+    <span id="count" class="muted grow"></span>
+    <span id="result"></span>
+    <button id="send" class="primary" data-i18n="grabSend"></button>
+  </div>
+  <script src="i18n.js"></script>
+  <script src="grabber.js"></script>
+</body>
+</html>
