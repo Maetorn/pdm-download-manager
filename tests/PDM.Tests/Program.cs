@@ -825,7 +825,6 @@ internal static class Program
         var url = $"{_srv.Base}/file/{size}?mode=slow";
         var job = new DownloadJob { Url = new Uri(url) };
         using var cts = new CancellationTokenSource();
-        List<SegmentState>? saved = null;
         var trace = new StringBuilder();
         var sw0 = Stopwatch.StartNew();
         var (o1, path, dl1) = await Download(url, 6, job, async d =>

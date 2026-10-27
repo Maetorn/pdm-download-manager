@@ -253,7 +253,7 @@ public static partial class Loc
         ["ProxyCustom"] = "Usa questo proxy",
         ["ProxyAddress"] = "Indirizzo",
         ["ProxyHint"] = "Esempio: 127.0.0.1:8080 (HTTP) o socks5://127.0.0.1:1080. Tutti i download, gli strumenti video e gli aggiornamenti passano da qui.",
-        ["Grabber"] = "Raccoglitore di siti…",
+        ["Grabber"] = "Grabber di siti…",
         ["GrabStart"] = "Pagina iniziale",
         ["GrabDepth"] = "Profondità",
         ["GrabDepth0"] = "Solo questa pagina",
