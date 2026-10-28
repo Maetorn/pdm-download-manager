@@ -192,6 +192,21 @@ public sealed class DownloadManager : IDisposable
         return h.Length == 64 && h.All(Uri.IsHexDigit) ? h : null;
     }
 
+    /// <summary>
+    /// A download handed over by the browser while its add window is still open: saved in the list right away, paused
+    /// and in no queue, so it survives a crash or a closed app. The window replaces it (Download) or removes it (Cancel).
+    /// </summary>
+    public DownloadItem AddPending(AddRequest req)
+    {
+        var copy = req.Copy();
+        copy.StartNow = false;
+        var item = Add(copy);
+        item.QueueId = null;
+        MarkDirty();
+        SaveNow();
+        return item;
+    }
+
     /// <summary>Starts immediately, even when the concurrent limit is reached.</summary>
     public void StartNow(DownloadItem item)
     {
@@ -228,7 +243,7 @@ public sealed class DownloadManager : IDisposable
     }
 
     /// <summary>An item for the same address (ignoring #fragment and a trailing slash), if any.</summary>
-    public DownloadItem? FindDuplicate(string url)
+    public DownloadItem? FindDuplicate(string url, IReadOnlyCollection<DownloadItem>? ignore = null)
     {
         static string Norm(string? u)
         {
@@ -239,7 +254,8 @@ public sealed class DownloadManager : IDisposable
         }
         var n = Norm(url);
         if (n.Length == 0) return null;
-        return Items.FirstOrDefault(i => string.Equals(Norm(i.Url), n, StringComparison.Ordinal) || string.Equals(Norm(i.FinalUrl), n, StringComparison.Ordinal));
+        return Items.FirstOrDefault(i => (ignore == null || !ignore.Contains(i))
+            && (string.Equals(Norm(i.Url), n, StringComparison.Ordinal) || string.Equals(Norm(i.FinalUrl), n, StringComparison.Ordinal)));
     }
 
     // ---------------- automatic retry ----------------
@@ -431,13 +447,8 @@ public sealed class DownloadManager : IDisposable
     private string? VideoTempToDelete(DownloadItem item)
     {
         if (item.Kind != DownloadKind.Video) return null;
-        var options = item.Video ?? new VideoOptions();
-        var dir = YtDlpRunner.JobTempDir(item.Url, options, item.Id);
-        // An old id-less folder may belong to another job for the same video too: keep it while one exists.
-        if (dir == YtDlpRunner.LegacyJobTempDir(item.Url, options) && Items.Any(i => i != item && i.Kind == DownloadKind.Video
-                && i.Status != DownloadStatus.Completed && YtDlpRunner.JobTempDir(i.Url, i.Video ?? new VideoOptions(), i.Id) == dir))
-            return null;
-        return dir;
+        // Only the job's own folder; an old shared folder is left for whichever job adopts it.
+        return YtDlpRunner.JobTempDir(item.Url, item.Video ?? new VideoOptions(), item.Id);
     }
 
     private static void DeleteDirectory(string? dir)

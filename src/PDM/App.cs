@@ -178,7 +178,7 @@ internal sealed class PdmApp : Application
         }
     }
 
-    /// <summary>True when PDM took the download(s): added to the list or shown in its add window.</summary>
+    /// <summary>True when PDM took the download(s): saved in the list (and shown in its add window when asked).</summary>
     private bool HandleDownloads(DownloadMessage m)
     {
         try
@@ -188,7 +188,9 @@ internal sealed class PdmApp : Application
                 var req = m.Items[0];
                 if (m.Interactive || Settings.ShowDialogForBrowserDownloads)
                 {
-                    new AddDownloadWindow(this, req).ShowAndActivate();
+                    // Saved before the browser hears "ok" (it then cancels its own copy): nothing is lost even if PDM
+                    // closes while the window is open. The window replaces it on Download and removes it on Cancel.
+                    new AddDownloadWindow(this, req, [Manager.AddPending(req)]).ShowAndActivate();
                 }
                 else
                 {
@@ -198,7 +200,7 @@ internal sealed class PdmApp : Application
             }
             else
             {
-                new AddDownloadWindow(this, m.Items).ShowAndActivate();
+                new AddDownloadWindow(this, m.Items, m.Items.Select(Manager.AddPending).ToList()).ShowAndActivate();
             }
             return true;
         }

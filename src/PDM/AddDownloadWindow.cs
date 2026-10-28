@@ -47,14 +47,19 @@ internal sealed class AddDownloadWindow : PdmWindow
     private long _probedSize = -1;
 
     /// <summary>Single download (URL may be empty).</summary>
-    public AddDownloadWindow(PdmApp app, AddRequest request) : this(app, request, null) { }
+    /// <param name="pending">Items already saved for this request (browser hand-over); replaced on Download, removed on Cancel.</param>
+    public AddDownloadWindow(PdmApp app, AddRequest request, IReadOnlyList<DownloadItem>? pending = null) : this(app, request, null, pending) { }
 
     /// <summary>Batch: several links at once.</summary>
-    public AddDownloadWindow(PdmApp app, List<AddRequest> batch) : this(app, batch.FirstOrDefault() ?? new AddRequest(), batch) { }
+    public AddDownloadWindow(PdmApp app, List<AddRequest> batch, IReadOnlyList<DownloadItem>? pending = null)
+        : this(app, batch.FirstOrDefault() ?? new AddRequest(), batch, pending) { }
 
-    private AddDownloadWindow(PdmApp app, AddRequest template, List<AddRequest>? batch)
+    private readonly IReadOnlyList<DownloadItem> _pending;
+
+    private AddDownloadWindow(PdmApp app, AddRequest template, List<AddRequest>? batch, IReadOnlyList<DownloadItem>? pending)
     {
         _app = app;
+        _pending = pending ?? [];
         _template = template;
         _batch = batch is { Count: > 1 } ? batch : null;
         Title = _batch != null ? Loc.F("BatchLinks", _batch.Count) : (template.Cookies != null || template.PageUrl != null ? Loc.T("BrowserDownloadTitle") : Loc.T("AddTitle"));
@@ -121,7 +126,11 @@ internal sealed class AddDownloadWindow : PdmWindow
             if (string.IsNullOrEmpty(_url.Text)) _url.Focus();
             else { _ = ProbeAsync(); _name.Focus(); _name.SelectAll(); }
         };
-        Closed += (_, _) => { _probeCts?.Cancel(); _checkCts?.Cancel(); _debounce.Stop(); };
+        Closed += (_, _) =>
+        {
+            _probeCts?.Cancel(); _checkCts?.Cancel(); _debounce.Stop();
+            DropPending(); // Download replaced them; Cancel or closing the window means the user does not want them
+        };
     }
 
     private void BuildSingle(StackPanel root)
@@ -168,7 +177,7 @@ internal sealed class AddDownloadWindow : PdmWindow
                 ToolTip = FileNames.Redact(r.Url),
                 Margin = new Thickness(2),
             };
-            if (_app.Manager.FindDuplicate(r.Url) is { } dup)
+            if (_app.Manager.FindDuplicate(r.Url, _pending) is { } dup)
             {
                 // Already in the list: left unticked, marked.
                 cb.IsChecked = false;
@@ -453,7 +462,7 @@ internal sealed class AddDownloadWindow : PdmWindow
                     return;
                 }
                 if (!FileNames.IsHttpUrl(url, out _)) { Ui.Info(this, Loc.T("InvalidUrl")); _url.Focus(); return; }
-                if (_app.Manager.FindDuplicate(url) is { } dup && !AskDuplicate(dup)) return;
+                if (_app.Manager.FindDuplicate(url, _pending) is { } dup && !AskDuplicate(dup)) return;
                 var name = _name.Text.Trim();
                 var userChoseName = _nameEdited && name.Length > 0;
                 var req = new AddRequest
@@ -493,5 +502,11 @@ internal sealed class AddDownloadWindow : PdmWindow
             return;
         }
         Close();
+    }
+
+    private void DropPending()
+    {
+        foreach (var p in _pending)
+            if (_app.Manager.Items.Contains(p) && !p.IsActive && p.Status != DownloadStatus.Completed) _app.Manager.Remove(p, deleteFile: false);
     }
 }

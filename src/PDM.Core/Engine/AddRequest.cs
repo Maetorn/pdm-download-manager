@@ -22,4 +22,6 @@ public sealed class AddRequest
     public string? ExpectedSha256 { get; set; }
     public DownloadKind Kind { get; set; } = DownloadKind.Http;
     public VideoOptions? Video { get; set; }
+
+    public AddRequest Copy() => (AddRequest)MemberwiseClone();
 }
