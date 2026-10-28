@@ -116,12 +116,20 @@ public sealed partial class YtDlpRunner
 
     /// <summary>Temp folder of a video job (parts, resume state); deleted when the job finishes or is removed.
     /// Keyed by the job's id, so the same video added twice (e.g. into two folders) gets two folders and removing one
-    /// job cannot delete the other's progress. A job started by an older version keeps its old, id-less folder.</summary>
-    public static string JobTempDir(string url, VideoOptions o, Guid jobId)
+    /// job cannot delete the other's progress.</summary>
+    public static string JobTempDir(string url, VideoOptions o, Guid jobId) => TempDirFor(OptionsKey(url, o) + "|" + jobId.ToString("N"));
+
+    /// <summary>
+    /// Versions before 1.2.13 kept one id-less folder per video and options. The first job that starts takes it over by
+    /// renaming it to its own folder (a rename is atomic: only one job can win), so progress is kept and no two jobs
+    /// ever share it. Called before the job uses its folder.
+    /// </summary>
+    public static void AdoptLegacyTempDir(string url, VideoOptions o, Guid jobId)
     {
-        var dir = TempDirFor(OptionsKey(url, o) + "|" + jobId.ToString("N"));
+        var dir = JobTempDir(url, o, jobId);
         var legacy = LegacyJobTempDir(url, o);
-        return !Directory.Exists(dir) && Directory.Exists(legacy) ? legacy : dir;
+        if (Directory.Exists(dir) || !Directory.Exists(legacy)) return;
+        try { Directory.Move(legacy, dir); } catch (IOException) { } catch (UnauthorizedAccessException) { }
     }
 
     /// <summary>Folder name used before job ids were part of it (same video + same options = same folder).</summary>
@@ -233,6 +241,7 @@ public sealed partial class YtDlpRunner
     {
         if (!_tools.HasYtDlp) return DownloadOutcome.Fail(DownloadErrorKind.Unknown, 0, "ytdlp-missing");
         Directory.CreateDirectory(_folder);
+        AdoptLegacyTempDir(_url, _options, JobId);
         Directory.CreateDirectory(TempDir);
         var hasCookies = WriteCookieFile();
         _withCookies = hasCookies && CookiesFirst(_url);

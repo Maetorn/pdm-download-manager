@@ -88,6 +88,7 @@ internal static class Program
         await RunAsync("Manager: cancel/remove deletes partial file", TestManagerRemove);
         await RunAsync("Queues: a queue with 1-at-a-time runs its downloads one after another, then reports finished", TestQueueOneAtATime);
         await RunAsync("Queues: stopping a queue is not \"finished\" (no sleep/shutdown), and no auto retry restarts it", TestQueueStopIsNotFinished);
+        await RunAsync("Browser hand-over: the download is saved to disk before PDM answers ok; not its own duplicate", TestPendingHandOver);
         await RunAsync("Archives: .tar.gz extracts with the system tar", TestTarExtract);
         await RunAsync("Proxy: downloads go through the custom proxy (and its login)", TestProxyRouting);
         await RunAsync("Site login: 401 without login; Basic login only for its own host", TestSiteLogin);
@@ -283,12 +284,16 @@ internal static class Program
         var (a, b) = (Guid.NewGuid(), Guid.NewGuid());
         Assert(YtDlpRunner.JobTempDir(url, o, a) != YtDlpRunner.JobTempDir(url, o, b), "two jobs, two folders");
         Eq(YtDlpRunner.JobTempDir(url, o, a), YtDlpRunner.JobTempDir(url, o, a), "stable for one job (resume)");
-        // A job started by an older version keeps using its existing id-less folder.
+        // An old shared folder (before job ids) is taken over by exactly one job; the other starts in its own folder.
         var legacy = YtDlpRunner.LegacyJobTempDir(url, o);
         Directory.CreateDirectory(legacy);
-        try { Eq(legacy, YtDlpRunner.JobTempDir(url, o, a), "old folder kept for an old job"); }
-        finally { Directory.Delete(legacy, true); }
-        Assert(YtDlpRunner.JobTempDir(url, o, a) != legacy, "new jobs use the id folder");
+        File.WriteAllText(Path.Combine(legacy, "pdm-state.json"), "{}");
+        YtDlpRunner.AdoptLegacyTempDir(url, o, a);
+        YtDlpRunner.AdoptLegacyTempDir(url, o, b);
+        Assert(!Directory.Exists(legacy), "old folder taken over");
+        Assert(File.Exists(Path.Combine(YtDlpRunner.JobTempDir(url, o, a), "pdm-state.json")), "first job keeps the progress");
+        Assert(!Directory.Exists(YtDlpRunner.JobTempDir(url, o, b)), "second job does not share it");
+        Directory.Delete(YtDlpRunner.JobTempDir(url, o, a), true);
     }
 
     private static void TestFirefoxManifestFile()
@@ -1163,6 +1168,30 @@ internal static class Program
         lock (finished) Eq("", string.Join(",", finished), "no 'queue finished' after a stop");
         Assert(!item.IsActive && !waiting.IsActive, "nothing started again");
         mgr.Dispose();
+    }
+
+    private static Task TestPendingHandOver()
+    {
+        var settings = new AppSettings { DownloadFolder = Path.Combine(_work, "pending") };
+        settings.Normalize();
+        var mgr = new DownloadManager(settings, new TestContext());
+        var url = $"{_srv.Base}/file/{1024 * 1024}?mode=pending";
+        DownloadItem pending;
+        lock (mgr) pending = mgr.AddPending(new AddRequest { Url = url, Cookies = [] });
+        Eq(DownloadStatus.Paused, pending.Status, "waits for the user");
+        Eq(null, pending.QueueId, "in no queue (Start queue does not start it)");
+        // Already on disk: a new manager (PDM restarted or crashed) still has it.
+        var again = new DownloadManager(settings, new TestContext());
+        again.Load();
+        Assert(again.Items.Any(i => i.Id == pending.Id), "saved before the answer");
+        again.Dispose();
+        lock (mgr)
+        {
+            Eq(null, mgr.FindDuplicate(url, [pending]), "the add window does not call it a duplicate of itself");
+            Eq(pending, mgr.FindDuplicate(url), "others do see it");
+        }
+        mgr.Dispose();
+        return Task.CompletedTask;
     }
 
     private static async Task TestProxyRouting()
