@@ -256,11 +256,22 @@ function header(headers, name) {
 // many times) never touch storage. Lost when the service worker sleeps; storage dedupes then.
 const seenMedia = new Map(); // tabId -> Set(url)
 
-async function addMedia(tabId, media) {
+// Each tab's list is read, changed and written back; two media requests arriving together would each write
+// their own copy and one would be lost, so the updates of a tab run one after another.
+const mediaQueue = new Map(); // tabId -> Promise of the last update
+
+function addMedia(tabId, media) {
   let seen = seenMedia.get(tabId);
   if (!seen) seenMedia.set(tabId, (seen = new Set()));
-  if (seen.has(media.url)) return;
+  if (seen.has(media.url)) return Promise.resolve();
   seen.add(media.url);
+  const next = (mediaQueue.get(tabId) || Promise.resolve()).then(() => storeMedia(tabId, media)).catch(() => {});
+  mediaQueue.set(tabId, next);
+  next.then(() => { if (mediaQueue.get(tabId) === next) mediaQueue.delete(tabId); });
+  return next;
+}
+
+async function storeMedia(tabId, media) {
   const key = 'media:' + tabId;
   const cur = (await chrome.storage.session.get(key))[key] || [];
   if (cur.some((m) => m.url === media.url)) return;
@@ -361,6 +372,14 @@ chrome.runtime.onInstalled.addListener(() => { createMenus(); updateIcon(); });
 chrome.runtime.onStartup.addListener(() => { createMenus(); updateIcon(); pingOnce(); });
 
 // Asks one frame only (content scripts run in every frame).
+// Link lists of the "all links" page live in session storage (gone when the browser closes); keep the newest few
+// so a reloaded list page still finds its links without filling the storage.
+async function pruneGrabberLists() {
+  const all = await chrome.storage.session.get(null);
+  const old = Object.keys(all).filter((k) => k.startsWith('grabber:')).sort((a, b) => (all[b].at || 0) - (all[a].at || 0)).slice(4);
+  if (old.length) await chrome.storage.session.remove(old);
+}
+
 async function askTab(tabId, message, frameId) {
   try { return await chrome.tabs.sendMessage(tabId, message, { frameId: frameId || 0 }); } catch { return null; }
 }
@@ -384,8 +403,11 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       await sendDownloads(items, true, 'selection');
     } else if (info.menuItemId === 'pdm-all') {
       const links = (await askTab(tab.id, { type: 'collectLinks' }, info.frameId)) || [];
-      await chrome.storage.session.set({ grabber: { pageUrl: tab.url, title: tab.title, incognito, links: links.slice(0, 2000) } });
-      await chrome.tabs.create({ url: chrome.runtime.getURL('grabber.html'), index: tab.index + 1 });
+      // One entry per list page, so two lists opened quickly one after another each keep their own links.
+      const id = crypto.randomUUID();
+      await pruneGrabberLists();
+      await chrome.storage.session.set({ ['grabber:' + id]: { at: Date.now(), pageUrl: tab.url, title: tab.title, incognito, links: links.slice(0, 2000) } });
+      await chrome.tabs.create({ url: chrome.runtime.getURL('grabber.html') + '#' + id, index: tab.index + 1 });
     } else if (info.menuItemId === 'pdm-video') {
       await sendVideo(tab, info.srcUrl, info.frameId ? info.frameUrl : null);
     }

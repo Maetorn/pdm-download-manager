@@ -25,7 +25,8 @@ function applyFilter() {
 }
 
 async function init() {
-  data = (await chrome.storage.session.get('grabber')).grabber || { links: [] };
+  const key = 'grabber:' + location.hash.slice(1);
+  data = (await chrome.storage.session.get(key))[key] || { links: [] };
   $('page').textContent = (data.title ? data.title + ' — ' : '') + (data.pageUrl || '');
   if (!data.links.length) { $('count').textContent = msg('grabNoLinks'); $('send').disabled = true; return; }
   for (const l of data.links) {

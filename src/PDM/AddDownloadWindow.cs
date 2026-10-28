@@ -460,13 +460,17 @@ internal sealed class AddDownloadWindow : PdmWindow
                 {
                     Url = url,
                     // Keep the server's name logic for guesses; an explicit or probed name is used as-is.
-                    FileName = userChoseName || _probedName != null ? name : _template.FileName,
+                    FileName = _template.Kind == DownloadKind.Video && url == _template.Url && !userChoseName ? _template.FileName // yt-dlp names video files
+                        : userChoseName || _probedName != null ? name : _template.FileName,
                     Folder = folder,
                     Referrer = string.IsNullOrWhiteSpace(_referrer.Text) ? null : _referrer.Text.Trim(),
                     PageUrl = _template.PageUrl,
                     UserAgent = _template.UserAgent,
                     // Cookies only belong to the link they came with.
                     Cookies = url == _template.Url ? _template.Cookies : null,
+                    // A video job (e.g. "download again" from the history) stays a video job with its quality choices.
+                    Kind = url == _template.Url ? _template.Kind : DownloadKind.Http,
+                    Video = url == _template.Url ? _template.Video : null,
                     Connections = connections,
                     StartNow = startNow,
                     QueueId = SelectedQueue(),

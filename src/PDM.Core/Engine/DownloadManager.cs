@@ -288,6 +288,7 @@ public sealed class DownloadManager : IDisposable
     public void PauseAll()
     {
         foreach (var item in Items.Where(i => i.Status == DownloadStatus.Queued)) item.Status = DownloadStatus.Paused;
+        foreach (var item in Items) item.RetryAt = null; // stopped by the user: no automatic retry either
         foreach (var r in _running.Values.ToList()) r.Cts.Cancel();
         MarkDirty();
     }
@@ -309,6 +310,7 @@ public sealed class DownloadManager : IDisposable
         {
             if (_running.TryGetValue(item.Id, out var r)) r.Cts.Cancel();
             else if (item.Status == DownloadStatus.Queued) item.Status = DownloadStatus.Paused;
+            item.RetryAt = null; // a stopped queue must not start again through an automatic retry
         }
         MarkDirty();
     }
@@ -399,7 +401,8 @@ public sealed class DownloadManager : IDisposable
             r.Cts.Cancel();
             lock (_running) _running.Remove(item.Id);
             var temp = item.TempPath;
-            r.Task?.ContinueWith(_ => { TryDelete(temp); DeleteVideoTemp(item); }, TaskScheduler.Default);
+            var videoTemp = VideoTempToDelete(item); // decided here, on the owner thread; deleted once the job has stopped
+            r.Task?.ContinueWith(_ => { TryDelete(temp); DeleteDirectory(videoTemp); }, TaskScheduler.Default);
         }
         else
         {
@@ -422,15 +425,25 @@ public sealed class DownloadManager : IDisposable
     }
 
     /// <summary>Leftovers of a video job (parts, resume state, yt-dlp .part files).</summary>
-    private static void DeleteVideoTemp(DownloadItem item)
+    private void DeleteVideoTemp(DownloadItem item) => DeleteDirectory(VideoTempToDelete(item));
+
+    /// <summary>The job's temp folder, or null when there is none to delete. Owner thread (reads the list).</summary>
+    private string? VideoTempToDelete(DownloadItem item)
     {
-        if (item.Kind != DownloadKind.Video) return;
-        try
-        {
-            var dir = YtDlpRunner.JobTempDir(item.Url, item.Video ?? new VideoOptions());
-            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
-        }
-        catch { }
+        if (item.Kind != DownloadKind.Video) return null;
+        var options = item.Video ?? new VideoOptions();
+        var dir = YtDlpRunner.JobTempDir(item.Url, options, item.Id);
+        // An old id-less folder may belong to another job for the same video too: keep it while one exists.
+        if (dir == YtDlpRunner.LegacyJobTempDir(item.Url, options) && Items.Any(i => i != item && i.Kind == DownloadKind.Video
+                && i.Status != DownloadStatus.Completed && YtDlpRunner.JobTempDir(i.Url, i.Video ?? new VideoOptions(), i.Id) == dir))
+            return null;
+        return dir;
+    }
+
+    private static void DeleteDirectory(string? dir)
+    {
+        if (dir == null) return;
+        try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); } catch { }
     }
 
     private static void TryDelete(string? path)
@@ -481,6 +494,7 @@ public sealed class DownloadManager : IDisposable
                 item.Folder = Path.Combine(Settings.DownloadFolder, FileCategories.FolderName(item.Video?.AudioOnly == true ? FileCategory.Music : FileCategory.Video));
             run.Video = new YtDlpRunner(Tools, item.Url, item.Folder, item.Video ?? new VideoOptions(), item.Referrer)
             {
+                JobId = item.Id,
                 // Streams are fetched by our own multi-connection engine when possible.
                 Engine = MakeOptions(item),
                 Limiters = [GlobalLimiter, run.Limiter],
@@ -650,8 +664,14 @@ public sealed class DownloadManager : IDisposable
         if (outcome.Completed && run.Video!.OutputPath is { } p && File.Exists(p))
         {
             finalPath = p;
-            if (Settings.ScanWithAttachmentServices) scan = AttachmentScanner.Scan(p, run.Item.Url, run.Item.Referrer);
-            else AttachmentScanner.WriteZoneIdentifier(p, run.Item.Url, run.Item.Referrer);
+            // Every file of a playlist gets the "downloaded from the internet" mark and the antivirus scan, not only the
+            // last one; a file the scanner blocked is what the item reports.
+            foreach (var file in run.Video.OutputPaths.Append(p).Distinct(StringComparer.OrdinalIgnoreCase).Where(File.Exists))
+            {
+                if (!Settings.ScanWithAttachmentServices) { AttachmentScanner.WriteZoneIdentifier(file, run.Item.Url, run.Item.Referrer); continue; }
+                var r = AttachmentScanner.Scan(file, run.Item.Url, run.Item.Referrer);
+                if (scan != ScanResult.Blocked) scan = r;
+            }
         }
         var total = run.Video!.TotalBytes;
         Post(() => Finished(run, outcome, null, finalPath, scan, null, total));
@@ -752,7 +772,10 @@ public sealed class DownloadManager : IDisposable
         SaveNow();
         Pump();
 
-        if (queueId != null && !Items.Any(i => i.QueueId == queueId && (i.IsActive || i.Status == DownloadStatus.Queued)))
+        // Finished only when the last job ended by itself: a pause or a stopped queue is not the end (the after-queue
+        // action may be sleep or shutdown), nor is a download still waiting for its automatic retry.
+        if (queueId != null && !outcome.Cancelled
+            && !Items.Any(i => i.QueueId == queueId && (i.IsActive || i.Status == DownloadStatus.Queued || i.RetryAt != null)))
             QueueFinished?.Invoke(queueId);
     }
 

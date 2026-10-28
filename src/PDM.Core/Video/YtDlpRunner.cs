@@ -50,6 +50,8 @@ public sealed partial class YtDlpRunner
     public double? ReportedSpeed => IsDirect ? null : _speed;
     public string? Stage { get; private set; }
     public string? OutputPath { get; private set; }
+    /// <summary>Every file the job produced (a playlist gives several); the last one is <see cref="OutputPath"/>.</summary>
+    public List<string> OutputPaths { get; } = new();
     public Action<string>? FileNameChanged { get; set; }
 
     /// <summary>Browser cookies for sites that need a login (Instagram, Facebook, …). Given to yt-dlp as a cookies.txt
@@ -106,12 +108,27 @@ public sealed partial class YtDlpRunner
     public static string TempDirFor(string url) =>
         Path.Combine(AppPaths.DataRoot, "vtemp", Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(url)))[..16]);
 
-    /// <summary>Temp folder of this job: the same video in two qualities must not share .part files.</summary>
-    private string TempDir => JobTempDir(_url, _options);
+    /// <summary>The download this runner works for; part of the temp folder name.</summary>
+    public Guid JobId { get; init; }
 
-    /// <summary>Temp folder of a video job (parts, resume state); deleted when the job finishes or is removed.</summary>
-    public static string JobTempDir(string url, VideoOptions o) =>
-        TempDirFor(url + "|" + o.Format + "|" + o.AudioOnly + "|" + o.AudioFormat + "|" + o.Container + "|" + o.Playlist);
+    /// <summary>Temp folder of this job: two jobs never share .part files or resume state, even for the same video.</summary>
+    private string TempDir => JobTempDir(_url, _options, JobId);
+
+    /// <summary>Temp folder of a video job (parts, resume state); deleted when the job finishes or is removed.
+    /// Keyed by the job's id, so the same video added twice (e.g. into two folders) gets two folders and removing one
+    /// job cannot delete the other's progress. A job started by an older version keeps its old, id-less folder.</summary>
+    public static string JobTempDir(string url, VideoOptions o, Guid jobId)
+    {
+        var dir = TempDirFor(OptionsKey(url, o) + "|" + jobId.ToString("N"));
+        var legacy = LegacyJobTempDir(url, o);
+        return !Directory.Exists(dir) && Directory.Exists(legacy) ? legacy : dir;
+    }
+
+    /// <summary>Folder name used before job ids were part of it (same video + same options = same folder).</summary>
+    public static string LegacyJobTempDir(string url, VideoOptions o) => TempDirFor(OptionsKey(url, o));
+
+    private static string OptionsKey(string url, VideoOptions o) =>
+        url + "|" + o.Format + "|" + o.AudioOnly + "|" + o.AudioFormat + "|" + o.Container + "|" + o.Playlist;
 
     /// <summary>yt-dlp appends the final path here (UTF-8). Unlike --print, --print-to-file keeps progress output on.</summary>
     private string ResultFile => Path.Combine(TempDir, "pdm-result.txt");
@@ -311,8 +328,12 @@ public sealed partial class YtDlpRunner
         {
             if (File.Exists(ResultFile))
             {
-                var last = File.ReadAllLines(ResultFile, Encoding.UTF8).LastOrDefault(l => !string.IsNullOrWhiteSpace(l))?.Trim();
-                if (last != null && File.Exists(last)) OutputPath = last;
+                foreach (var line in File.ReadAllLines(ResultFile, Encoding.UTF8))
+                {
+                    var path = line.Trim();
+                    if (path.Length > 0 && File.Exists(path) && !OutputPaths.Contains(path, StringComparer.OrdinalIgnoreCase)) OutputPaths.Add(path);
+                }
+                if (OutputPaths.Count > 0) OutputPath = OutputPaths[^1];
             }
             if (OutputPath == null && Directory.Exists(_folder))
             {

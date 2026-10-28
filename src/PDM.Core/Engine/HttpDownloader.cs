@@ -416,7 +416,11 @@ public sealed class HttpDownloader
                 }
                 ThrowForStatus(resp, firstRequest: true);
                 var info = Describe(resp, _requestUrl);
-                if (!info.SupportsRanges || info.TotalBytes != _job.TotalBytes || ValidatorChanged(info.ETag, _job.ETag) || ValidatorChanged(info.LastModified, _job.LastModified))
+                // On resume a validator that disappeared also counts as a change: a server that stops sending the
+                // ETag may be serving different bytes of the same size, and old and new parts must never be mixed.
+                if (!info.SupportsRanges || info.TotalBytes != _job.TotalBytes
+                    || ValidatorChanged(info.ETag, _job.ETag) || ValidatorChanged(info.LastModified, _job.LastModified)
+                    || ValidatorGone(info.ETag, _job.ETag) || ValidatorGone(info.LastModified, _job.LastModified))
                 {
                     Status?.Invoke("changed");
                     Log.Info("Server file changed or no longer resumable; restarting from zero.");
@@ -466,6 +470,23 @@ public sealed class HttpDownloader
 
     private static bool ValidatorChanged(string? now, string? before) =>
         !string.IsNullOrEmpty(now) && !string.IsNullOrEmpty(before) && !string.Equals(now, before, StringComparison.Ordinal);
+
+    /// <summary>Takes from every limiter in turn; the smallest grant wins and the extra goes back to the others.</summary>
+    /// <remarks><paramref name="grants"/>: one slot per limiter, allocated once per connection (no allocation per read).</remarks>
+    private async ValueTask<int> AcquireAsync(int desired, int[] grants, CancellationToken ct)
+    {
+        var want = desired;
+        for (var i = 0; i < _limiters.Length; i++) want = grants[i] = await _limiters[i].AcquireAsync(want, ct).ConfigureAwait(false);
+        for (var i = 0; i < _limiters.Length; i++) _limiters[i].Refund(grants[i] - want);
+        return want;
+    }
+
+    private void Refund(int bytes)
+    {
+        foreach (var limiter in _limiters) limiter.Refund(bytes);
+    }
+
+    private static bool ValidatorGone(string? now, string? before) => string.IsNullOrEmpty(now) && !string.IsNullOrEmpty(before);
 
     private async Task<(HttpResponseMessage, Seg)> StartFreshAsync(CancellationToken ct)
     {
@@ -715,6 +736,7 @@ public sealed class HttpDownloader
         using var stall = CancellationTokenSource.CreateLinkedTokenSource(ct);
         stall.CancelAfter(_options.StallTimeout);
         var armed = Stopwatch.GetTimestamp();
+        var grants = new int[_limiters.Length]; // scratch for AcquireAsync, once per response
         while (true)
         {
             long pos, end;
@@ -733,8 +755,7 @@ public sealed class HttpDownloader
             {
                 while (filled < room)
                 {
-                    var want = room - filled;
-                    foreach (var limiter in _limiters) want = await limiter.AcquireAsync(want, ct).ConfigureAwait(false);
+                    var want = await AcquireAsync(room - filled, grants, ct).ConfigureAwait(false);
                     var now = Stopwatch.GetTimestamp();
                     if (now - armed > Stopwatch.Frequency)
                     {
@@ -750,6 +771,7 @@ public sealed class HttpDownloader
                     {
                         throw new RetryableException("stalled");
                     }
+                    Refund(want - n); // a short read: the rest of the grant goes back
                     if (n == 0) { eof = true; break; }
                     filled += n;
                     if (Stopwatch.GetTimestamp() - started > FlushTicks) break;

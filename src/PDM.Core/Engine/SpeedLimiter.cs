@@ -25,6 +25,17 @@ public sealed class SpeedLimiter
         }
     }
 
+    /// <summary>Gives back bytes taken but not used (a stricter limiter later in the chain allowed fewer, or the
+    /// read returned less), so one download's own limit does not use up the shared limit.</summary>
+    public void Refund(int bytes)
+    {
+        if (bytes <= 0) return;
+        lock (_gate)
+        {
+            if (_bytesPerSecond > 0) _tokens += bytes;
+        }
+    }
+
     /// <summary>Waits until at least one byte may be read and returns how many (≤ desired).</summary>
     public async ValueTask<int> AcquireAsync(int desired, CancellationToken ct)
     {
