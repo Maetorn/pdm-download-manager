@@ -45,6 +45,7 @@ internal static class Program
         Run("Languages: app (en, tr, de, fr, it) and extension have every string with the same placeholders", TestTranslations);
         Run("yt-dlp: arguments are safe (--ignore-config, '--' before URL)", TestYtDlpArgs);
         Run("yt-dlp: mp4 prefers H.264/AAC and avoids AV1", TestYtDlpFormat);
+        Run("Video: the same video added twice gets two temp folders (no shared parts, no deleting each other's)", TestVideoTempPerJob);
         Run("yt-dlp: info JSON parsing", TestYtDlpInfo);
         Run("ToolManager: checksum list parsing", TestFindHash);
         Run("Cookies: container domain rules", TestCookieContainer);
@@ -71,6 +72,7 @@ internal static class Program
         await RunAsync("2c Bounded requests + connection drops → retries, hash OK", TestBoundedWithDrops);
         await RunAsync("3 Pause + resume (new engine instance) continues, hash OK", TestPauseResume);
         await RunAsync("3b Resume after server file changed → restarts from zero", TestChangedOnResume);
+        await RunAsync("3c Resume when the server dropped its ETag (same size, new bytes) → restarts, no mix", TestEtagGoneOnResume);
         await RunAsync("7a Connection drops → retries, hash OK", TestDrops);
         await RunAsync("7b 429 + Retry-After → waits and succeeds", Test429);
         await RunAsync("7c 404 → fails with HTTP 404", Test404);
@@ -79,11 +81,13 @@ internal static class Program
         await RunAsync("Redirect → follows, uses final URL", TestRedirect);
         await RunAsync("Cookies sent only to their own host across redirects", TestCookiesScoped);
         await RunAsync("Speed limit 1 MB/s is respected", TestSpeedLimit);
+        await RunAsync("Speed limits: a download's own low limit does not use up the shared limit of the others", TestSharedLimitNotWasted);
         await RunAsync("Probe: name from Content-Disposition (UTF-8), size", TestProbe);
         await RunAsync("Manager: add → complete → renamed, Mark-of-the-Web, saved list", TestManagerEndToEnd);
         await RunAsync("Manager: expected SHA-256 mismatch → error", TestManagerHashMismatch);
         await RunAsync("Manager: cancel/remove deletes partial file", TestManagerRemove);
         await RunAsync("Queues: a queue with 1-at-a-time runs its downloads one after another, then reports finished", TestQueueOneAtATime);
+        await RunAsync("Queues: stopping a queue is not \"finished\" (no sleep/shutdown), and no auto retry restarts it", TestQueueStopIsNotFinished);
         await RunAsync("Archives: .tar.gz extracts with the system tar", TestTarExtract);
         await RunAsync("Proxy: downloads go through the custom proxy (and its login)", TestProxyRouting);
         await RunAsync("Site login: 401 without login; Basic login only for its own host", TestSiteLogin);
@@ -270,6 +274,21 @@ internal static class Program
                 foreach (var ph in new[] { "$A$", "$B$" }) Eq(en.Contains(ph), tr.Contains(ph), $"{lang}: {e.Name} {ph}");
             }
         }
+    }
+
+    private static void TestVideoTempPerJob()
+    {
+        var o = new VideoOptions { Format = YtDlpRunner.FormatFor(1080) };
+        const string url = "https://www.youtube.com/watch?v=aqz-KE-bpKQ";
+        var (a, b) = (Guid.NewGuid(), Guid.NewGuid());
+        Assert(YtDlpRunner.JobTempDir(url, o, a) != YtDlpRunner.JobTempDir(url, o, b), "two jobs, two folders");
+        Eq(YtDlpRunner.JobTempDir(url, o, a), YtDlpRunner.JobTempDir(url, o, a), "stable for one job (resume)");
+        // A job started by an older version keeps using its existing id-less folder.
+        var legacy = YtDlpRunner.LegacyJobTempDir(url, o);
+        Directory.CreateDirectory(legacy);
+        try { Eq(legacy, YtDlpRunner.JobTempDir(url, o, a), "old folder kept for an old job"); }
+        finally { Directory.Delete(legacy, true); }
+        Assert(YtDlpRunner.JobTempDir(url, o, a) != legacy, "new jobs use the id folder");
     }
 
     private static void TestFirefoxManifestFile()
@@ -751,12 +770,13 @@ internal static class Program
     // ------------------------------------------------------------------ engine tests
 
     private static async Task<(DownloadOutcome outcome, string path, HttpDownloader dl)> Download(string url, int connections = 8,
-        DownloadJob? job = null, Func<HttpDownloader, Task>? during = null, CancellationToken ct = default, SpeedLimiter? limiter = null, long maxRequestBytes = 0)
+        DownloadJob? job = null, Func<HttpDownloader, Task>? during = null, CancellationToken ct = default, SpeedLimiter? limiter = null, long maxRequestBytes = 0,
+        SpeedLimiter? ownLimiter = null)
     {
         var path = Path.Combine(_work, Guid.NewGuid().ToString("N") + ".bin");
         job ??= new DownloadJob { Url = new Uri(url) };
         var dl = new HttpDownloader(job, new EngineOptions { Connections = connections, MaxRetries = 8, RetryDelayScale = 0.05, StallTimeout = TimeSpan.FromSeconds(10), MaxRequestBytes = maxRequestBytes },
-            limiter == null ? [] : [limiter]);
+            new[] { limiter, ownLimiter }.OfType<SpeedLimiter>().ToArray());
         dl.ResolveTempPath = _ => path;
         var run = dl.RunAsync(ct);
         if (during != null) await during(dl);
@@ -869,6 +889,22 @@ internal static class Program
         Eq(TestServer.ExpectedSha(size, 2), Sha(p), "new content, not a mix");
     }
 
+    private static async Task TestEtagGoneOnResume()
+    {
+        const long size = 8L * 1024 * 1024;
+        // Half downloaded while the server said ETag "v1"; now it sends other bytes of the same size and no ETag.
+        var path = Path.Combine(_work, "etag-gone.bin");
+        File.WriteAllBytes(path, new byte[size]);
+        var job = new DownloadJob
+        {
+            Url = new Uri($"{_srv.Base}/file/{size}?mode=noetag"), TempPath = path, TotalBytes = size, SupportsRanges = true, ETag = "\"v1\"",
+            Segments = [new SegmentState { Start = 0, End = size - 1, Position = size / 2 }],
+        };
+        var (o, p, _) = await Download(job.Url.AbsoluteUri, 4, job);
+        Assert(o.Completed, "completed: " + o);
+        Eq(TestServer.ExpectedSha(size, 2), Sha(p), "new content, not a mix");
+    }
+
     private static async Task TestDrops()
     {
         const long size = 12L * 1024 * 1024;
@@ -948,6 +984,26 @@ internal static class Program
         Assert(sw.Elapsed.TotalSeconds >= 2.4, $"took {sw.Elapsed.TotalSeconds:F2}s, expected ≥ 2.4s");
         Assert(sw.Elapsed.TotalSeconds < 6, $"took {sw.Elapsed.TotalSeconds:F2}s, too slow");
         Eq(TestServer.ExpectedSha(size), Sha(path), "sha256");
+    }
+
+    private static async Task TestSharedLimitNotWasted()
+    {
+        // Shared 2 MB/s. Download A also has its own 128 KB/s limit; B has none. A must not use up the shared limit
+        // while it waits for its own (before the fix B got almost nothing), so B gets nearly 2 MB/s.
+        var shared = new SpeedLimiter { BytesPerSecond = 2 * 1024 * 1024 };
+        var own = new SpeedLimiter { BytesPerSecond = 128 * 1024 };
+        using var stopA = new CancellationTokenSource();
+        var a = Download($"{_srv.Base}/file/{64L * 1024 * 1024}", 4, ct: stopA.Token, limiter: shared, ownLimiter: own);
+        await Task.Delay(300);
+        const long size = 4L * 1024 * 1024;
+        var sw = Stopwatch.StartNew();
+        var (o, path, _) = await Download($"{_srv.Base}/file/{size}", 4, limiter: shared);
+        sw.Stop();
+        stopA.Cancel();
+        try { await a; } catch { }
+        Assert(o.Completed, "completed");
+        Eq(TestServer.ExpectedSha(size), Sha(path), "sha256");
+        Assert(sw.Elapsed.TotalSeconds < 3.5, $"B took {sw.Elapsed.TotalSeconds:F2}s for 4 MB under a 2 MB/s shared limit (A wasted the shared limit)");
     }
 
     private static async Task TestProbe()
@@ -1049,7 +1105,7 @@ internal static class Program
         var folder = Path.Combine(_work, "queue");
         var settings = new AppSettings { DownloadFolder = folder, MaxConcurrentDownloads = 3 };
         settings.Normalize();
-        settings.Queues.Add(new QueueInfo { Id = "q1", Name = "Gece", MaxConcurrent = 1 });
+        settings.Queues.Add(new QueueInfo { Id = "q1", Name = "Night", MaxConcurrent = 1 });
         var mgr = new DownloadManager(settings, new TestContext());
         mgr.EngineOptionsOverride = () => new EngineOptions { Connections = 2, RetryDelayScale = 0.05 };
         var finished = new List<string>();
@@ -1073,6 +1129,39 @@ internal static class Program
         await Task.Delay(300);
         lock (finished) Eq("q1", string.Join(",", finished), "queue finished reported once");
         Eq(3, mgr.History.Snapshot().Entries.Count(e => e.Url.Contains("mode=slow") && e.Folder.StartsWith(folder)), "recorded in history");
+        mgr.Dispose();
+    }
+
+    private static async Task TestQueueStopIsNotFinished()
+    {
+        var settings = new AppSettings { DownloadFolder = Path.Combine(_work, "queue-stop"), MaxConcurrentDownloads = 3, AutoRetry = true };
+        settings.Normalize();
+        settings.Queues.Add(new QueueInfo { Id = "q2", Name = "Stop", MaxConcurrent = 1 });
+        var mgr = new DownloadManager(settings, new TestContext());
+        mgr.EngineOptionsOverride = () => new EngineOptions { Connections = 2, RetryDelayScale = 0.05 };
+        var finished = new List<string>();
+        mgr.QueueFinished += id => { lock (finished) finished.Add(id); };
+        DownloadItem item, waiting;
+        lock (mgr)
+        {
+            item = mgr.Add(new AddRequest { Url = $"{_srv.Base}/file/{24L * 1024 * 1024}?mode=slow", StartNow = false, QueueId = "q2" });
+            waiting = mgr.Add(new AddRequest { Url = $"{_srv.Base}/file/{1024L * 1024}?mode=slow", StartNow = false, QueueId = "q2" });
+            mgr.StartQueue("q2");
+        }
+        for (var t = 0; t < 400 && item.DownloadedBytes < 256 * 1024; t++) await Task.Delay(25);
+        Assert(item.IsActive, "first job running: " + item.Status);
+        lock (mgr)
+        {
+            waiting.Status = DownloadStatus.Error; // as if it had failed with a network error and waits for its retry
+            waiting.RetryAt = DateTime.Now.AddSeconds(1);
+            mgr.StopQueue("q2");
+        }
+        for (var t = 0; t < 200 && item.IsActive; t++) await Task.Delay(25);
+        Eq(DownloadStatus.Paused, item.Status, "stopped job paused");
+        Eq(null, waiting.RetryAt, "retry cancelled by the stop");
+        await Task.Delay(1500);
+        lock (finished) Eq("", string.Join(",", finished), "no 'queue finished' after a stop");
+        Assert(!item.IsActive && !waiting.IsActive, "nothing started again");
         mgr.Dispose();
     }
 

@@ -146,12 +146,16 @@ internal sealed class PdmApp : Application
             case ArgsMessage a:
                 Dispatcher.BeginInvoke(() => HandleArgs(a.Args, fromStart: false));
                 return Task.FromResult(BridgeProtocol.Ok());
+            // The extension cancels the browser's own download when PDM says ok, so ok is only sent once PDM really
+            // has it (added to the list, or its window is open). Anything else answers an error and the browser keeps it.
             case DownloadMessage d:
-                Dispatcher.BeginInvoke(() => HandleDownloads(d));
-                return Task.FromResult(BridgeProtocol.Ok(d.Items.Count));
+                return OnUiAsync(() => HandleDownloads(d), BridgeProtocol.Ok(d.Items.Count));
             case VideoMessage v:
-                Dispatcher.BeginInvoke(() => new VideoWindow(this, v.PageUrl, v.Title, v.Media, v.UserAgent, v.Cookies, v.Referrer).ShowAndActivate());
-                return Task.FromResult(BridgeProtocol.Ok(1));
+                return OnUiAsync(() =>
+                {
+                    new VideoWindow(this, v.PageUrl, v.Title, v.Media, v.UserAgent, v.Cookies, v.Referrer).ShowAndActivate();
+                    return true;
+                }, BridgeProtocol.Ok(1));
             case UpdateExtensionMessage { Firefox: true }:
                 Dispatcher.BeginInvoke(() => InstallFirefoxExtension(quiet: true));
                 return Task.FromResult(BridgeProtocol.Ok());
@@ -160,7 +164,22 @@ internal sealed class PdmApp : Application
         }
     }
 
-    private void HandleDownloads(DownloadMessage m)
+    /// <summary>Runs <paramref name="act"/> on the UI thread; <paramref name="ok"/> if it succeeded, an error otherwise.</summary>
+    private async Task<byte[]> OnUiAsync(Func<bool> act, byte[] ok)
+    {
+        try
+        {
+            return await Dispatcher.InvokeAsync(act) ? ok : BridgeProtocol.Error("app");
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Browser request failed", ex);
+            return BridgeProtocol.Error("app");
+        }
+    }
+
+    /// <summary>True when PDM took the download(s): added to the list or shown in its add window.</summary>
+    private bool HandleDownloads(DownloadMessage m)
     {
         try
         {
@@ -181,10 +200,12 @@ internal sealed class PdmApp : Application
             {
                 new AddDownloadWindow(this, m.Items).ShowAndActivate();
             }
+            return true;
         }
         catch (Exception ex)
         {
             Log.Error("Could not add browser download", ex);
+            return false;
         }
     }
 

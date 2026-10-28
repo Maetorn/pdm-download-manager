@@ -15,6 +15,7 @@ namespace PDM.Tests;
 ///   r429      – answer the first 3 requests with 429 + Retry-After: 1
 ///   chunked   – no Content-Length, chunked transfer, ignore Range
 ///   etag2     – ETag/content seed "v2" (simulates a changed file)
+///   noetag    – content seed "v2" with no ETag at all (a changed file whose server dropped the validator)
 ///   slow      – 64 KB pauses of 20 ms
 ///   name      – Content-Disposition with a UTF-8 file name
 ///   cookie    – require Cookie "session=abc" (403 otherwise)
@@ -200,7 +201,7 @@ public sealed class TestServer : IDisposable
         var modes = (query["mode"] ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).ToHashSet();
         var key = uri.AbsolutePath + "?" + query["mode"];
         var count = _counters.AddOrUpdate(key, 1, (_, v) => v + 1);
-        var seed = modes.Contains("etag2") ? 2 : 0;
+        var seed = modes.Contains("etag2") || modes.Contains("noetag") ? 2 : 0;
         var etag = modes.Contains("etag2") ? "\"v2\"" : "\"v1\"";
 
         if (modes.Contains("forbidden") || (modes.Contains("cookie") && !headers.GetValueOrDefault("cookie", "").Contains("session=abc")))
@@ -232,7 +233,7 @@ public sealed class TestServer : IDisposable
         var sb = new StringBuilder();
         sb.Append(partial ? "HTTP/1.1 206 Partial Content\r\n" : "HTTP/1.1 200 OK\r\n");
         sb.Append("Content-Type: application/octet-stream\r\n");
-        sb.Append($"ETag: {etag}\r\n");
+        if (!modes.Contains("noetag")) sb.Append($"ETag: {etag}\r\n");
         if (!modes.Contains("norange") && !modes.Contains("chunked")) sb.Append("Accept-Ranges: bytes\r\n");
         if (modes.Contains("name")) sb.Append("Content-Disposition: attachment; filename=\"fallback.bin\"; filename*=UTF-8''na%C3%AFve%20caf%C3%A9%20%C3%BC%C3%9F.bin\r\n");
         if (partial) sb.Append($"Content-Range: bytes {from}-{to}/{size}\r\n");
