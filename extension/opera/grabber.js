@@ -56,13 +56,23 @@ $('filter').addEventListener('input', applyFilter);
 $('all').addEventListener('click', () => { rows.forEach((r) => { if (r.li.style.display !== 'none') r.cb.checked = true; }); updateCount(); });
 $('none').addEventListener('click', () => { rows.forEach((r) => { r.cb.checked = false; }); updateCount(); });
 $('send').addEventListener('click', async () => {
-  const urls = rows.filter((r) => r.cb.checked && r.li.style.display !== 'none').map((r) => r.url);
-  if (!urls.length) return;
+  const chosen = rows.filter((r) => r.cb.checked && r.li.style.display !== 'none');
+  if (!chosen.length) return;
   $('send').disabled = true;
-  const resp = await chrome.runtime.sendMessage({ type: 'sendLinks', urls, pageUrl: data.pageUrl, incognito: data.incognito }).catch((e) => ({ ok: false, error: e && e.message }));
+  const resp = await chrome.runtime.sendMessage({ type: 'sendLinks', urls: chosen.map((r) => r.url), pageUrl: data.pageUrl, incognito: data.incognito, storeId: data.storeId }).catch((e) => ({ ok: false, error: e && e.message }));
   $('send').disabled = false;
-  $('result').textContent = resp && resp.ok ? msg('grabSent', urls.length) : msg('errorPrefix') + ((resp && resp.error) || '?');
-  $('result').className = resp && resp.ok ? 'good' : 'bad';
+  if (resp && resp.ok) {
+    // At most 500 links go in one send. What was really handed over is shown, and the rest stays ticked for the next press.
+    const sent = typeof resp.sent === 'number' ? resp.sent : chosen.length;
+    chosen.slice(0, sent).forEach((r) => { r.cb.checked = false; });
+    updateCount();
+    const left = chosen.length - sent;
+    $('result').textContent = left > 0 ? msg('grabSentPartial', sent, left) : msg('grabSent', sent);
+    $('result').className = 'good';
+  } else {
+    $('result').textContent = msg('errorPrefix') + ((resp && resp.error) || '?');
+    $('result').className = 'bad';
+  }
 });
 
 init();

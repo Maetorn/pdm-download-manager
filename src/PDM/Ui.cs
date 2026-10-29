@@ -110,7 +110,7 @@ internal static class Ui
     public static string Eta(TimeSpan? t)
     {
         if (t is not { } v) return "";
-        if (v.TotalDays >= 1) return $"{(int)v.TotalDays}g {v.Hours}s";
+        if (v.TotalDays >= 1) return Loc.F("EtaDays", (int)v.TotalDays, v.Hours);
         if (v.TotalHours >= 1) return $"{(int)v.TotalHours}:{v.Minutes:00}:{v.Seconds:00}";
         return $"{v.Minutes}:{v.Seconds:00}";
     }

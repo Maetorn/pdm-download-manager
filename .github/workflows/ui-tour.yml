@@ -58,3 +58,26 @@ jobs:
           git add -A
           git commit -q -m "UI tour of $env:GITHUB_SHA"
           git push -q -f "https://x-access-token:$env:GH_TOKEN@github.com/$env:GITHUB_REPOSITORY.git" ui-tour-results
+
+      # The tour writes its findings to clipped.txt and always exits 0 (so the results can be pushed first). This step
+      # turns them into a failure: a missing or short run, an exception, or any cut / low-contrast / timeout line.
+      - name: Fail when the tour found a problem
+        shell: pwsh
+        run: |
+          $bad = @()
+          $folders = Get-ChildItem tour-out -Directory | Where-Object Name -ne 'logs'
+          if ($folders.Count -ne 10) { $bad += "expected 10 language/theme folders, found $($folders.Count)" }
+          foreach ($d in $folders) {
+            $report = Join-Path $d.FullName 'clipped.txt'
+            if (-not (Test-Path $report)) { $bad += "$($d.Name): no report"; continue }
+            $lines = @(Get-Content $report)
+            $captured = @($lines | Where-Object { $_ -match "`tWINDOW`t" }).Count
+            $pngs = @(Get-ChildItem $d.FullName -Filter *.png).Count
+            if ($pngs -lt 25 -or $captured -ne $pngs) { $bad += "$($d.Name): $pngs screenshots, $captured captured" }
+            foreach ($line in ($lines | Where-Object { $_ -notmatch "`tWINDOW`t" -and $_.Trim() })) { $bad += "$($d.Name): $line" }
+          }
+          if ($bad.Count -gt 0) {
+            $bad | ForEach-Object { Write-Host "::error::$_" }
+            exit 1
+          }
+          Write-Host "Tour clean: $($folders.Count) folders, no findings."

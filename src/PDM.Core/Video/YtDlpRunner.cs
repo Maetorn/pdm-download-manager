@@ -144,6 +144,9 @@ public sealed partial class YtDlpRunner
     /// <summary>" 1080p" for video (yt-dlp templates cannot contain parentheses here) so different qualities of one video get different files; nothing for audio.</summary>
     private string QualitySuffix => _options.AudioOnly ? "" : "%(height& {}p|)s";
 
+    /// <summary>Where yt-dlp puts its finished files while the job runs (inside the job's temp folder).</summary>
+    private string OutDir => Path.Combine(TempDir, "out");
+
     private string SingleTemplate => "%(title).150B" + QualitySuffix + ".%(ext)s";
 
     public List<string> BuildArguments()
@@ -155,7 +158,10 @@ public sealed partial class YtDlpRunner
             "--progress", "--progress-template", "download:PDMPROG %(progress.downloaded_bytes)s %(progress.total_bytes)s %(progress.total_bytes_estimate)s %(progress.speed)s",
             "--print-to-file", "after_move:%(filepath)s", ResultFile,
             "--paths", "temp:" + TempDir,
-            "--paths", "home:" + _folder,
+            // yt-dlp writes into the job's own folder; the finished files are moved into the target folder afterwards under a
+            // name that is free there. (With the target folder as "home", yt-dlp saw another video's file of the same
+            // title and quality as "already downloaded" and PDM took it as this job's result.)
+            "--paths", "home:" + OutDir,
         };
         if (_tools.HasFfmpeg) { a.Add("--ffmpeg-location"); a.Add(_tools.Dir); }
         AddJsRuntime(a, _tools);
@@ -318,6 +324,7 @@ public sealed partial class YtDlpRunner
         if (proc.ExitCode == 0)
         {
             ReadResult(started);
+            MoveToFolder();
         }
         if (proc.ExitCode == 0 && OutputPath != null)
         {
@@ -344,9 +351,9 @@ public sealed partial class YtDlpRunner
                 }
                 if (OutputPaths.Count > 0) OutputPath = OutputPaths[^1];
             }
-            if (OutputPath == null && Directory.Exists(_folder))
+            if (OutputPath == null && Directory.Exists(OutDir))
             {
-                OutputPath = new DirectoryInfo(_folder).EnumerateFiles()
+                OutputPath = new DirectoryInfo(OutDir).EnumerateFiles("*", SearchOption.AllDirectories)
                     .Where(f => f.LastWriteTimeUtc >= startedUtc.AddSeconds(-5) && f.Extension is not (".part" or ".ytdl" or ".tmp") && !f.Name.Contains(".part-"))
                     .OrderByDescending(f => f.LastWriteTimeUtc)
                     .FirstOrDefault()?.FullName;
@@ -354,6 +361,38 @@ public sealed partial class YtDlpRunner
         }
         catch (Exception ex) { Log.Warn("yt-dlp result: " + ex.GetType().Name); }
         if (OutputPath != null) FileNameChanged?.Invoke(Path.GetFileName(OutputPath));
+    }
+
+    /// <summary>Moves what yt-dlp produced from the job folder into the target folder, never over an existing file
+    /// (a name that is taken gets " (1)"), and points <see cref="OutputPath"/> / <see cref="OutputPaths"/> at the new places.</summary>
+    private void MoveToFolder()
+    {
+        try
+        {
+            if (!Directory.Exists(OutDir)) return;
+            var moved = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var file in Directory.EnumerateFiles(OutDir, "*", SearchOption.AllDirectories)
+                         .Where(f => !f.EndsWith(".part", StringComparison.OrdinalIgnoreCase) && !f.EndsWith(".ytdl", StringComparison.OrdinalIgnoreCase)).ToList())
+            {
+                var relative = Path.GetRelativePath(OutDir, file); // inside OutDir by construction (it was enumerated there)
+                var dir = Path.GetFullPath(Path.Combine(_folder, Path.GetDirectoryName(relative) ?? ""));
+                Directory.CreateDirectory(dir);
+                var target = Path.Combine(dir, FileNames.MakeUnique(dir, Path.GetFileName(relative)));
+                File.Move(file, target);
+                moved[file] = target;
+            }
+            string Remap(string p) => moved.TryGetValue(p, out var t) ? t : p;
+            var paths = OutputPaths.Select(Remap).ToList();
+            OutputPaths.Clear();
+            OutputPaths.AddRange(paths);
+            if (OutputPath != null) OutputPath = Remap(OutputPath);
+            if (OutputPath != null) FileNameChanged?.Invoke(Path.GetFileName(OutputPath));
+        }
+        catch (Exception ex)
+        {
+            Log.Warn("Moving the video into its folder failed: " + ex.GetType().Name);
+            OutputPath = null; // reported as a failure rather than pointing at a file that is not there
+        }
     }
 
     private static string Trim(string s) => s.Length > 300 ? s[..300] + "…" : s;

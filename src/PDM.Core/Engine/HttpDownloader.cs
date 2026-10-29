@@ -209,7 +209,7 @@ public sealed class HttpDownloader
         using var client = CreateClient(job.Cookies);
         var d = new HttpDownloader(job, new EngineOptions());
         using var req = d.BuildRequest(job.Url, 0, 0);
-        using var resp = await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        using var resp = await SendForHeadersAsync(client, req, ct).ConfigureAwait(false);
         if ((int)resp.StatusCode >= 400) throw new HttpRequestException($"HTTP {(int)resp.StatusCode}", null, resp.StatusCode);
         return Describe(resp, job.Url);
     }
@@ -398,13 +398,13 @@ public sealed class HttpDownloader
             HttpResponseMessage resp;
             try
             {
-                resp = await _client!.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+                resp = await SendForHeadersAsync(_client!, req, ct).ConfigureAwait(false);
             }
             catch (HttpRequestException) when (_requestUrl != _job.Url)
             {
                 _requestUrl = _job.Url;
                 using var req2 = BuildRequest(_requestUrl, 0, 0);
-                resp = await _client!.SendAsync(req2, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+                resp = await SendForHeadersAsync(_client!, req2, ct).ConfigureAwait(false);
             }
             using (resp)
             {
@@ -486,6 +486,27 @@ public sealed class HttpDownloader
         foreach (var limiter in _limiters) limiter.Refund(bytes);
     }
 
+    /// <summary>Longest wait for a server's response headers. The client has no overall timeout (downloads may take
+    /// hours), and the stall timer only watches the body, so a server that accepts the connection and then says
+    /// nothing would otherwise hold a connection for ever.</summary>
+    public static TimeSpan HeaderTimeout = TimeSpan.FromSeconds(60);
+
+    private static async Task<HttpResponseMessage> SendForHeadersAsync(HttpClient http, HttpRequestMessage request, CancellationToken ct)
+    {
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        limit.CancelAfter(HeaderTimeout);
+        try
+        {
+            var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, limit.Token).ConfigureAwait(false);
+            limit.CancelAfter(Timeout.InfiniteTimeSpan); // headers are here: the body is watched by the stall timer, not by this
+            return response;
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new TimeoutException("no response headers");
+        }
+    }
+
     private static bool ValidatorGone(string? now, string? before) => string.IsNullOrEmpty(now) && !string.IsNullOrEmpty(before);
 
     private async Task<(HttpResponseMessage, Seg)> StartFreshAsync(CancellationToken ct)
@@ -496,7 +517,7 @@ public sealed class HttpDownloader
             var req = BuildRequest(_job.Url, 0, _options.MaxRequestBytes > 0 ? _options.MaxRequestBytes - 1 : null);
             try
             {
-                resp = await _client!.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+                resp = await SendForHeadersAsync(_client!, req, ct).ConfigureAwait(false);
                 if (IsRetryableStatus(resp.StatusCode) && attempt < Math.Min(_options.MaxRetries, 5))
                 {
                     var wait = RetryAfter(resp) ?? Backoff(attempt + 1);
@@ -647,7 +668,7 @@ public sealed class HttpDownloader
                         long? to = end == UnknownEnd ? null : end;
                         if (_rangesOk && _options.MaxRequestBytes > 0 && to.HasValue) to = Math.Min(to.Value, pos + _options.MaxRequestBytes - 1);
                         using var req = BuildRequest(_requestUrl, _rangesOk || pos > 0 ? pos : null, _rangesOk ? to : null);
-                        resp = await _client!.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+                        resp = await SendForHeadersAsync(_client!, req, ct).ConfigureAwait(false);
                         ValidateSegmentResponse(resp, pos);
                     }
 

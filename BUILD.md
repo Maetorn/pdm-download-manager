@@ -4,6 +4,9 @@
 
 - Windows 10/11 x64
 - .NET 10 SDK — either installed normally (`dotnet` on PATH) or in `%USERPROFILE%\.dotnet` (dotnet-install script).
+- **Windows C++ build tools** (Visual Studio or "Build Tools for Visual Studio" with the "Desktop development with C++"
+  workload): the native messaging host is compiled with NativeAOT, which needs the platform linker. Without it
+  `build.ps1` stops at the "Publishing native host" step.
 - Windows PowerShell 5.1 (built in). It is also used to draw the icons when they are missing.
 - Internet access to `api.nuget.org` for the first build only: restore pulls Microsoft's runtime packs (self-contained publish) and the trimmer. `nuget.config` limits sources to nuget.org and to `Microsoft.*` / `runtime.*` package IDs. The projects have **no** third-party package references.
 
@@ -54,11 +57,15 @@ dotnet build src/PDM -p:EnableWindowsTargeting=true
 dotnet build tests/PDM.Tests -p:EnableWindowsTargeting=true
 ```
 
-The tests also run there (`dotnet run --project tests/PDM.Tests`), except the few that need Windows (DPAPI, named pipe ACLs, path rules, job objects); CI runs all of them on Windows.
+The tests also run there (`dotnet run --project tests/PDM.Tests`). A few need Windows (DPAPI, named pipe ACLs, path
+rules) and a few need a tool that may be missing (FFmpeg, the native host exe, a script as yt-dlp on Linux only). The
+runner reports those as **skipped**, separately from passed and failed; they are not counted as passes. CI runs
+almost all of them on Windows (the Linux-only script test and the FFmpeg conversion are skipped there).
 
 ## Screenshots of every window (CI)
 
 `.github/workflows/ui-tour.yml` builds a test version (`dotnet build src/PDM -c Release -p:UiTour=true`, which adds
 `src/PDM/UiTour.cs`; releases never include it) and runs `PDM.exe --ui-tour <folder> <language> <theme>` for every
 language in light and dark. Each run saves a PNG of every window and `clipped.txt`, the list of texts that do not fit
-their space. The results are pushed to the `ui-tour-results` branch.
+their space. The results are pushed to the `ui-tour-results` branch, and the workflow fails when a run has missing
+screenshots, a report line other than "window captured", or fewer than the 10 language/theme folders.

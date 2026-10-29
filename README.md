@@ -1,7 +1,8 @@
 # PDM — Download Manager for Windows
 
 PDM is a fast, lightweight download manager for Windows with a browser extension for Opera, Chrome, Edge and Firefox.
-It uses no third-party libraries — only .NET 10 and components that ship with Windows.
+The app itself uses no third-party libraries — only .NET 10 and components that ship with Windows. The optional
+video features download separate programs (yt-dlp, FFmpeg, Deno) when you ask for them, see "License" below.
 
 The interface is available in **English, German, French, Italian and Turkish** (it follows the Windows display language;
 change it in Settings → General).
@@ -132,8 +133,9 @@ Without a signature "Add to Firefox" opens `about:debugging`: use **Load Tempora
 - No administrator rights; everything is per user (HKCU).
 - DLL planting protection: PDM loads Windows DLLs from System32 only; the current folder, network shares and
   low-integrity files are removed from the DLL search.
-- Helper tools run in a locked-down Windows job: FFmpeg and tar (which read untrusted files) cannot start other programs;
-  no tool can touch the clipboard, desktop or system settings; they all end when PDM ends.
+- Helper tools run in a Windows job object: FFmpeg and tar (which read untrusted files) cannot start other programs;
+  no tool can touch the clipboard, desktop or system settings; they all end when PDM ends. This limits what a
+  compromised tool can start; it is not a file-system or network sandbox, and PDM does not claim one.
 - Updates come only from this repository's GitHub releases, over HTTPS, verified with SHA-256, and only to a newer version.
 - The CI build runs with read-only permissions; only a small separate release step can publish.
 
@@ -172,7 +174,10 @@ Every push also builds on GitHub Actions; the build is kept for 30 days under **
 ## License
 
 [MIT](LICENSE). The optional video tools are separate programs with their own licenses and are downloaded from their
-official releases only if you install them: yt-dlp (Unlicense), FFmpeg (GPL), Deno (MIT).
+official releases only if you install them: yt-dlp (Unlicense) and Deno (MIT) from their own projects, and the Windows
+FFmpeg (GPL) build from the [yt-dlp/FFmpeg-Builds](https://github.com/yt-dlp/FFmpeg-Builds) project (not from the FFmpeg
+project itself). Each download is checked against the SHA-256 list published in the same release, which proves the file
+is the one that release contains, not who built it.
 
 PDM is an independent project and is not affiliated with any other download manager.
 You are responsible for having the right to download the content you download with PDM.

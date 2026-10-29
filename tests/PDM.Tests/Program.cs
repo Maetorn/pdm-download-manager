@@ -88,6 +88,9 @@ internal static class Program
         await RunAsync("Manager: cancel/remove deletes partial file", TestManagerRemove);
         await RunAsync("Queues: a queue with 1-at-a-time runs its downloads one after another, then reports finished", TestQueueOneAtATime);
         await RunAsync("Queues: stopping a queue is not \"finished\" (no sleep/shutdown), and no auto retry restarts it", TestQueueStopIsNotFinished);
+        await RunAsync("Site grabber: a page whose body stops is given up after the stall limit, not held for the whole timeout", TestGrabberBodyStall);
+        Run("Review follow-ups: huge RAR part number, raw cookie values", TestReviewSmallFixes);
+        await RunAsync("Engine: a server that never sends response headers is given up after the header timeout", TestHeaderTimeout);
         await RunAsync("Browser hand-over: the download is saved to disk before PDM answers ok; not its own duplicate", TestPendingHandOver);
         await RunAsync("Archives: .tar.gz extracts with the system tar", TestTarExtract);
         await RunAsync("Proxy: downloads go through the custom proxy (and its login)", TestProxyRouting);
@@ -105,14 +108,14 @@ internal static class Program
         }
         else
         {
-            Report.Add("SKIP  Native host exe tests (pass path to PDM.NativeHost.exe as argument)");
+            Skip("Native host exe tests", "pass the path to PDM.NativeHost.exe as an argument");
         }
 
         _srv.Dispose();
         try { Directory.Delete(_work, true); } catch { }
         Console.WriteLine();
         foreach (var r in Report) Console.WriteLine(r);
-        Console.WriteLine($"\n{_pass} passed, {_fail} failed in {sw.Elapsed.TotalSeconds:F1}s");
+        Console.WriteLine($"\n{_pass} passed, {_fail} failed, {_skip} skipped (not run here) in {sw.Elapsed.TotalSeconds:F1}s");
         return _fail == 0 ? 0 : 1;
     }
 
@@ -121,6 +124,7 @@ internal static class Program
     private static void Run(string name, Action test)
     {
         try { test(); Pass(name); }
+        catch (SkippedException skip) { Skip(name, skip.Message); }
         catch (Exception ex) { Fail(name, ex); }
     }
 
@@ -133,10 +137,17 @@ internal static class Program
             await test().WaitAsync(TimeSpan.FromMinutes(3));
             Pass($"{name} ({sw.Elapsed.TotalSeconds:F1}s)");
         }
+        catch (SkippedException skip) { Skip(name, skip.Message); }
         catch (Exception ex) { Fail(name, ex); }
     }
 
+    /// <summary>A test that could not run here (needs Windows, or a tool that is not installed). Counted apart: it is
+    /// not a pass, and what it would have checked is still unchecked.</summary>
+    private sealed class SkippedException(string reason) : Exception(reason);
+    private static int _skip;
+
     private static void Pass(string name) { _pass++; Report.Add("PASS  " + name); Console.Write('.'); }
+    private static void Skip(string name, string reason) { _skip++; Report.Add($"SKIP  {name}\n      {reason}"); Console.Write('s'); }
     private static void Fail(string name, Exception ex) { _fail++; Report.Add($"FAIL  {name}\n      {ex.GetType().Name}: {ex.Message}"); Console.Write('F'); }
 
     private static void Assert(bool cond, string message) { if (!cond) throw new Exception(message); }
@@ -583,7 +594,7 @@ internal static class Program
 
     private static async Task TestTarExtract()
     {
-        if (!File.Exists(Archives.TarPath)) { Report.Add("      (no tar at " + Archives.TarPath + ")"); return; }
+        if (!File.Exists(Archives.TarPath)) { throw new SkippedException("no tar at " + Archives.TarPath); }
         var dir = Path.Combine(_work, "tar");
         var src = Path.Combine(dir, "src");
         Directory.CreateDirectory(Path.Combine(src, "inner"));
@@ -713,7 +724,7 @@ internal static class Program
 
     private static async Task TestToolJob()
     {
-        if (!OperatingSystem.IsWindows()) { Report.Add("      (job objects: Windows only)"); return; }
+        if (!OperatingSystem.IsWindows()) { throw new SkippedException("job objects: Windows only"); }
         var cmd = Path.Combine(Environment.SystemDirectory, "cmd.exe");
         // cmd waits for input, so the job is in place before it tries to start whoami.exe.
         async Task<int> RunCmd(bool contained)
@@ -1194,6 +1205,63 @@ internal static class Program
         return Task.CompletedTask;
     }
 
+    private static async Task TestHeaderTimeout()
+    {
+        var old = HttpDownloader.HeaderTimeout;
+        HttpDownloader.HeaderTimeout = TimeSpan.FromMilliseconds(700);
+        try
+        {
+            var sw = Stopwatch.StartNew();
+            var failure = await Assert2Throws<TimeoutException>(() => HttpDownloader.ProbeAsync(new DownloadJob { Url = new Uri($"{_srv.Base}/file/1024?mode=hang") }, CancellationToken.None));
+            sw.Stop();
+            Assert(failure, "probe ends with a TimeoutException");
+            Assert(sw.Elapsed.TotalSeconds < 5, $"gave up after {sw.Elapsed.TotalSeconds:F1}s");
+            // A user cancel is still a cancel, not a timeout.
+            using var cts = new CancellationTokenSource(300);
+            var cancelled = await Assert2Throws<OperationCanceledException>(() => HttpDownloader.ProbeAsync(new DownloadJob { Url = new Uri($"{_srv.Base}/file/1024?mode=hang") }, cts.Token));
+            Assert(cancelled, "user cancel stays a cancel");
+        }
+        finally { HttpDownloader.HeaderTimeout = old; }
+    }
+
+    private static async Task<bool> Assert2Throws<T>(Func<Task> act) where T : Exception
+    {
+        try { await act(); return false; }
+        catch (T) { return true; }
+    }
+
+    private static async Task TestGrabberBodyStall()
+    {
+        var (stall, total) = (SiteGrabber.BodyStall, SiteGrabber.BodyTotal);
+        SiteGrabber.BodyStall = TimeSpan.FromMilliseconds(800);
+        SiteGrabber.BodyTotal = TimeSpan.FromSeconds(5);
+        try
+        {
+            var sw = Stopwatch.StartNew();
+            var found = await new SiteGrabber().RunAsync(new GrabberOptions { StartUrl = _srv.Base + "/stall.html", Depth = 1 }, CancellationToken.None);
+            sw.Stop();
+            Assert(sw.Elapsed.TotalSeconds < 6, $"gave up after {sw.Elapsed.TotalSeconds:F1}s (limit 0.8 s of silence)");
+            Eq(0, found.Count, "nothing found on a page that never arrived");
+        }
+        finally { (SiteGrabber.BodyStall, SiteGrabber.BodyTotal) = (stall, total); }
+    }
+
+    private static void TestReviewSmallFixes()
+    {
+        // 18: a hostile, absurdly long part number must not throw.
+        Assert(!Archives.IsArchive("x.part999999999999999999999.rar"), "huge part number: not volume 1, no exception");
+        Assert(Archives.IsArchive("x.part1.rar") && Archives.IsArchive("x.part01.rar"), "volume 1 is opened");
+        Assert(!Archives.IsArchive("x.part2.rar"), "volume 2 is not opened on its own");
+        // 17: a raw value with commas keeps its characters (inner quotes included).
+        var raw = "{\"x\":1,\"y\":2}";
+        var jar = Cookies.Build([new CookieData { Name = "session", Value = raw, Domain = "example.org", HostOnly = true }])!;
+        var header = jar.GetCookieHeader(new Uri("https://example.org/"));
+        Assert(header.Contains(raw, StringComparison.Ordinal), "cookie header keeps the value: " + header);
+        Eq("plain", Cookies.EscapeValue("plain"), "plain value untouched");
+        Eq("\"a,b\"", Cookies.EscapeValue("a,b"), "value with comma wrapped");
+        Eq("\"a,b\"", Cookies.EscapeValue("\"a,b\""), "already wrapped value untouched");
+    }
+
     private static async Task TestProxyRouting()
     {
         var settings = new AppSettings { ProxyMode = ProxyMode.Custom, ProxyAddress = $"127.0.0.1:{_srv.Port}" };
@@ -1209,7 +1277,7 @@ internal static class Program
             Assert(_srv.ProxyRequests > 0, "requests went through the proxy");
             mgr.Dispose();
 
-            if (!OperatingSystem.IsWindows()) { Report.Add("      (proxy login part needs DPAPI: Windows only)"); return; }
+            if (!OperatingSystem.IsWindows()) { throw new SkippedException("proxy login part needs DPAPI: Windows only"); }
             _srv.RequireProxyLogin = true;
             var (m2, failed) = await ManagerDownload($"{_srv.Base}/file/{size}");
             Eq("http:407", failed.Error, "no proxy login → 407");
@@ -1232,7 +1300,7 @@ internal static class Program
 
     private static async Task TestSiteLogin()
     {
-        if (!OperatingSystem.IsWindows()) { Report.Add("      (site logins need DPAPI: Windows only)"); return; }
+        if (!OperatingSystem.IsWindows()) { throw new SkippedException("site logins need DPAPI: Windows only"); }
         const long size = 300_000;
         try
         {
@@ -1277,7 +1345,7 @@ internal static class Program
     private static async Task TestConvert()
     {
         var ffmpeg = new[] { "/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg" }.FirstOrDefault(File.Exists);
-        if (ffmpeg == null) { Report.Add("      (no FFmpeg on this machine: conversion end-to-end skipped)"); return; }
+        if (ffmpeg == null) { throw new SkippedException("no FFmpeg on this machine: conversion end-to-end skipped"); }
         var toolDir = Path.Combine(_work, "tools-conv");
         Directory.CreateDirectory(toolDir);
         File.CreateSymbolicLink(Path.Combine(toolDir, "ffmpeg.exe"), ffmpeg);
@@ -1312,7 +1380,7 @@ internal static class Program
     /// (signed-in clients need a JavaScript runtime) and like Instagram does without them.</summary>
     private static async Task TestYtDlpCookieChoice()
     {
-        if (OperatingSystem.IsWindows()) { Report.Add("      (needs a script as yt-dlp: Linux only)"); return; }
+        if (OperatingSystem.IsWindows()) { throw new SkippedException("needs a script as yt-dlp: Linux only"); }
         var dir = Path.Combine(_work, "fake-ytdlp");
         Directory.CreateDirectory(dir);
         var script = Path.Combine(dir, "yt-dlp.exe");
@@ -1334,6 +1402,7 @@ internal static class Program
             if '-J' in args:
                 print('{"title":"T","duration":5,"extractor_key":"X","formats":[{"format_id":"1","vcodec":"avc1","acodec":"mp4a","height":720}]}'); sys.exit(0)
             home = [a[5:] for a in args if a.startswith('home:')][0]
+            os.makedirs(home, exist_ok=True)  # the real yt-dlp creates its output folder too
             out = os.path.join(home, 'video.mp4')
             open(out, 'wb').write(b'x' * 1000)
             target = args[args.index('--print-to-file') + 2]
@@ -1366,6 +1435,20 @@ internal static class Program
         Eq("C D", igCalls, "login site: cookies first");
 
         Assert(!YtDlpRunner.CookiesFirst("https://youtu.be/abc") && !YtDlpRunner.CookiesFirst("https://m.youtube.com/watch?v=1") && YtDlpRunner.CookiesFirst("https://x.com/a/status/1"), "CookiesFirst");
+
+        // Review finding 13: two videos that end up with the same file name in one folder. The second job must get its
+        // own file ("video (1).mp4") instead of taking the first one's file as its result, and the first stays untouched.
+        var sharedFolder = Path.Combine(_work, "fake-same-name");
+        Directory.CreateDirectory(sharedFolder);
+        File.WriteAllText(Path.Combine(sharedFolder, "video.mp4"), "someone else's file");
+        var first = new YtDlpRunner(tools, "https://www.instagram.com/p/one/", sharedFolder, new VideoOptions { Format = YtDlpRunner.FormatFor(720) }, null) { BrowserCookies = cookies, JobId = Guid.NewGuid() };
+        var second = new YtDlpRunner(tools, "https://www.instagram.com/p/two/", sharedFolder, new VideoOptions { Format = YtDlpRunner.FormatFor(720) }, null) { BrowserCookies = cookies, JobId = Guid.NewGuid() };
+        Assert((await first.RunAsync(CancellationToken.None)).Completed && (await second.RunAsync(CancellationToken.None)).Completed, "both completed");
+        Eq("someone else's file", File.ReadAllText(Path.Combine(sharedFolder, "video.mp4")), "an existing file is never replaced");
+        Eq(Path.Combine(sharedFolder, "video (1).mp4"), first.OutputPath, "first job: its own file");
+        Eq(Path.Combine(sharedFolder, "video (2).mp4"), second.OutputPath, "second job: its own file, not the first one's");
+        Eq(1000L, new FileInfo(second.OutputPath!).Length, "second file has the second job's content");
+        Assert(!Directory.Exists(YtDlpRunner.JobTempDir("https://www.instagram.com/p/two/", new VideoOptions { Format = YtDlpRunner.FormatFor(720) }, second.JobId)), "job folder cleaned up");
 
         // Info query ("Get qualities"): the same choice, and the other one when the first fails.
         File.WriteAllText(log, "");

@@ -107,13 +107,16 @@ function isExcluded(url, excludedSites) {
     .some((d) => host === d || host.endsWith('.' + d));
 }
 
-async function cookiesFor(urls, settings) {
+// storeId: the cookie store of the tab / download (Firefox container tabs have their own); without it the browser's
+// default store would be read and a container's account would send the wrong login. Partitioned (first-party
+// isolated) cookies are not collected: that is a known limit.
+async function cookiesFor(urls, settings, storeId) {
   if (!settings.sendCookies) return undefined;
   const seen = new Map();
   for (const url of urls) {
     if (!isHttp(url)) continue;
     try {
-      const list = await chrome.cookies.getAll({ url });
+      const list = await chrome.cookies.getAll(storeId ? { url, storeId } : { url });
       for (const c of list) {
         const key = c.name + '|' + c.domain + '|' + c.path;
         if (!seen.has(key)) {
@@ -133,10 +136,12 @@ async function buildItem(url, extra, settings) {
   if (isHttp(extra.pageUrl)) item.pageUrl = extra.pageUrl;
   if (extra.size > 0) item.size = extra.size;
   if (extra.mime) item.mime = String(extra.mime).slice(0, 200);
-  const cookies = extra.incognito ? undefined : await cookiesFor([url, ...(extra.cookieUrls || [])], settings);
+  const cookies = extra.incognito ? undefined : await cookiesFor([url, ...(extra.cookieUrls || [])], settings, extra.storeId);
   if (cookies) item.cookies = cookies;
   return item;
 }
+
+const MAX_SEND = 500; // BridgeProtocol.MaxItems in the app
 
 async function sendDownloads(items, interactive, source) {
   return sendNative({ type: 'download', items, interactive, source, userAgent: navigator.userAgent });
@@ -144,10 +149,21 @@ async function sendDownloads(items, interactive, source) {
 
 // ---------------- download capture ----------------
 
+// Addresses that were just requested with POST (a form that makes a report, a PDF, a ZIP …). PDM can only repeat
+// a GET, which is not the same request, so such a download stays in the browser.
+const recentPosts = new Map(); // url -> time
+const POST_MEMORY_MS = 5 * 60 * 1000;
+
+function postedRecently(url) {
+  const at = recentPosts.get(url);
+  return !!at && Date.now() - at < POST_MEMORY_MS;
+}
+
 async function shouldCapture(item, settings) {
   if (!settings.capture) return false;
   if (item.incognito) return false;
   if (item.byExtensionId) return false; // started by an extension (including us)
+  if (postedRecently(item.url) || postedRecently(item.finalUrl)) return false;
   const url = item.finalUrl || item.url;
   if (!isHttp(url)) return false; // blob:, data:, file:, ftp: stay in the browser
   if (isExcluded(url, settings.excludedSites) || isExcluded(item.referrer || '', settings.excludedSites)) return false;
@@ -182,6 +198,7 @@ async function handleDetermining(item, suggest) {
       size: item.fileSize > 0 ? item.fileSize : item.totalBytes,
       mime: item.mime,
       cookieUrls: item.url !== url ? [item.url] : [],
+      storeId: item.cookieStoreId, // Firefox: the container the download came from
       incognito: item.incognito,
     }, settings);
     const resp = await sendDownloads([entry], false, 'capture');
@@ -218,6 +235,7 @@ async function handleCreated(item) {
       size: item.fileSize > 0 ? item.fileSize : item.totalBytes,
       mime: item.mime,
       cookieUrls: item.url !== url ? [item.url] : [],
+      storeId: item.cookieStoreId, // Firefox: the container the download came from
       incognito: item.incognito,
     }, settings);
     const resp = await sendDownloads([entry], false, 'capture');
@@ -265,7 +283,11 @@ function addMedia(tabId, media) {
   if (!seen) seenMedia.set(tabId, (seen = new Set()));
   if (seen.has(media.url)) return Promise.resolve();
   seen.add(media.url);
-  const next = (mediaQueue.get(tabId) || Promise.resolve()).then(() => storeMedia(tabId, media)).catch(() => {});
+  return queueMedia(tabId, () => storeMedia(tabId, media));
+}
+
+function queueMedia(tabId, job) {
+  const next = (mediaQueue.get(tabId) || Promise.resolve()).then(job).catch(() => {});
   mediaQueue.set(tabId, next);
   next.then(() => { if (mediaQueue.get(tabId) === next) mediaQueue.delete(tabId); });
   return next;
@@ -287,15 +309,18 @@ async function getMedia(tabId) {
   return (await chrome.storage.session.get(key))[key] || [];
 }
 
-async function clearMedia(tabId) {
-  seenMedia.delete(tabId);
-  await chrome.storage.session.remove('media:' + tabId);
-  chrome.action.setBadgeText({ tabId, text: '' }).catch(() => {});
+function clearMedia(tabId) {
+  seenMedia.delete(tabId); // media of the new page may be added at once; its writes queue behind this removal
+  return queueMedia(tabId, async () => {
+    await chrome.storage.session.remove('media:' + tabId);
+    chrome.action.setBadgeText({ tabId, text: '' }).catch(() => {});
+  });
 }
 
 function onMediaHeaders(d) {
   // Cheapest checks first: this runs for every media load (and media-looking XHR) in every tab.
   if (d.tabId < 0 || d.statusCode >= 400 || !isHttp(d.url)) return;
+  if (d.timeStamp < (navStart.get(d.tabId) || 0)) return; // from the page that was just left
   const seen = seenMedia.get(d.tabId);
   if (seen && seen.has(d.url)) return;
   const ext = extOf(d.url);
@@ -321,10 +346,35 @@ const MEDIA_URL_PATTERNS = ['m3u8', 'mpd', 'mp4', 'm4v', 'webm', 'mkv', 'mov', '
 chrome.webRequest.onHeadersReceived.addListener(onMediaHeaders, { urls: ['<all_urls>'], types: ['media', 'object'] }, ['responseHeaders']);
 chrome.webRequest.onHeadersReceived.addListener(onMediaHeaders, { urls: MEDIA_URL_PATTERNS, types: ['xmlhttprequest', 'other'] }, ['responseHeaders']);
 
+// A page change empties the tab's media list. Two signals, because a browser reports navigation in several events:
+// the main-frame request itself (also tells POSTs apart), and an address change without a request (single-page sites
+// that change the URL themselves). Media that arrives late from the page that was left is dropped by its time stamp.
+const navStart = new Map(); // tabId -> time of the newest page change
+const tabPage = new Map(); // tabId -> its address without #fragment
+
+const pageOf = (url) => String(url || '').split('#')[0];
+
+function newPage(tabId, url, when) {
+  navStart.set(tabId, when || Date.now());
+  tabPage.set(tabId, pageOf(url));
+  clearMedia(tabId).catch(() => {});
+}
+
+chrome.webRequest.onBeforeRequest.addListener((d) => {
+  if (d.method === 'POST') {
+    recentPosts.set(d.url, Date.now());
+    if (recentPosts.size > 50) recentPosts.delete(recentPosts.keys().next().value);
+  }
+  if (d.type === 'main_frame' && d.tabId >= 0 && pageOf(d.url) !== tabPage.get(d.tabId)) newPage(d.tabId, d.url, d.timeStamp);
+}, { urls: ['http://*/*', 'https://*/*'], types: ['main_frame', 'sub_frame'] });
+
 chrome.tabs.onUpdated.addListener((tabId, info) => {
-  if (info.status === 'loading' && info.url) clearMedia(tabId).catch(() => {});
+  if (info.url && pageOf(info.url) !== tabPage.get(tabId)) newPage(tabId, info.url);
 });
-chrome.tabs.onRemoved.addListener((tabId) => { seenMedia.delete(tabId); chrome.storage.session.remove('media:' + tabId).catch(() => {}); });
+chrome.tabs.onRemoved.addListener((tabId) => {
+  navStart.delete(tabId); tabPage.delete(tabId);
+  seenMedia.delete(tabId); chrome.storage.session.remove('media:' + tabId).catch(() => {});
+});
 
 // Rough "same site" check (last two host labels), enough to keep a page from pointing us at another site.
 function sameSite(a, b) {
@@ -348,7 +398,7 @@ async function sendVideo(tab, src, frameUrl, permalink) {
     delete msg.title; // the tab title is the feed's; yt-dlp supplies the video's own title
   }
   if (!tab.incognito) {
-    const cookies = await cookiesFor([msg.pageUrl, ...media.map((m) => m.url).slice(0, 5)], settings);
+    const cookies = await cookiesFor([msg.pageUrl, ...media.map((m) => m.url).slice(0, 5)], settings, tab.cookieStoreId);
     if (cookies) msg.cookies = cookies;
   }
   return sendNative(msg);
@@ -392,21 +442,21 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     if (info.menuItemId === 'pdm-link' || info.menuItemId === 'pdm-media') {
       const url = info.menuItemId === 'pdm-link' ? info.linkUrl : info.srcUrl;
       if (!isHttp(url)) return;
-      const item = await buildItem(url, { referrer: info.pageUrl, pageUrl: info.pageUrl, incognito }, settings);
+      const item = await buildItem(url, { referrer: info.pageUrl, pageUrl: info.pageUrl, incognito, storeId: tab.cookieStoreId }, settings);
       await sendDownloads([item], true, 'menu');
     } else if (info.menuItemId === 'pdm-selection') {
       const links = (await askTab(tab.id, { type: 'selectionLinks' }, info.frameId)) || [];
       const urls = [...new Set(links.map((l) => l.url).filter(isHttp))].slice(0, 500);
       if (!urls.length) return;
       const items = [];
-      for (const u of urls) items.push(await buildItem(u, { referrer: info.pageUrl, pageUrl: info.pageUrl, incognito }, settings));
+      for (const u of urls) items.push(await buildItem(u, { referrer: info.pageUrl, pageUrl: info.pageUrl, incognito, storeId: tab.cookieStoreId }, settings));
       await sendDownloads(items, true, 'selection');
     } else if (info.menuItemId === 'pdm-all') {
       const links = (await askTab(tab.id, { type: 'collectLinks' }, info.frameId)) || [];
       // One entry per list page, so two lists opened quickly one after another each keep their own links.
       const id = crypto.randomUUID();
       await pruneGrabberLists();
-      await chrome.storage.session.set({ ['grabber:' + id]: { at: Date.now(), pageUrl: tab.url, title: tab.title, incognito, links: links.slice(0, 2000) } });
+      await chrome.storage.session.set({ ['grabber:' + id]: { at: Date.now(), pageUrl: tab.url, title: tab.title, incognito, storeId: tab.cookieStoreId, links: links.slice(0, 2000) } });
       await chrome.tabs.create({ url: chrome.runtime.getURL('grabber.html') + '#' + id, index: tab.index + 1 });
     } else if (info.menuItemId === 'pdm-video') {
       await sendVideo(tab, info.srcUrl, info.frameId ? info.frameUrl : null);
@@ -438,7 +488,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       case 'downloadMedia': {
         const settings = await getSettings();
         const tab = await chrome.tabs.get(msg.tabId);
-        const item = await buildItem(msg.url, { referrer: tab.url, pageUrl: tab.url, size: msg.size, mime: msg.mime, incognito: tab.incognito }, settings);
+        const item = await buildItem(msg.url, { referrer: tab.url, pageUrl: tab.url, size: msg.size, mime: msg.mime, incognito: tab.incognito, storeId: tab.cookieStoreId }, settings);
         return await sendDownloads([item], true, 'popup');
       }
       case 'videoPage': {
@@ -447,11 +497,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
       case 'sendLinks': {
         const settings = await getSettings();
-        const urls = (Array.isArray(msg.urls) ? msg.urls : []).filter(isHttp).slice(0, 500);
+        // One message carries at most MAX_SEND links (the app's own limit); the page sends the rest in further rounds
+        // and shows the number really handed over.
+        const urls = (Array.isArray(msg.urls) ? msg.urls : []).filter(isHttp).slice(0, MAX_SEND);
         if (!urls.length) return { ok: false };
         const items = [];
-        for (const u of urls) items.push(await buildItem(u, { referrer: msg.pageUrl, pageUrl: msg.pageUrl, incognito: !!msg.incognito }, settings));
-        return await sendDownloads(items, true, 'grabber');
+        for (const u of urls) items.push(await buildItem(u, { referrer: msg.pageUrl, pageUrl: msg.pageUrl, incognito: !!msg.incognito, storeId: msg.storeId }, settings));
+        const resp = await sendDownloads(items, true, 'grabber');
+        return resp && resp.ok === true ? { ...resp, sent: urls.length } : resp;
       }
       case 'settingsChanged':
         updateIcon();
