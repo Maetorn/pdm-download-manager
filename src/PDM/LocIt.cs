@@ -297,6 +297,7 @@ public static partial class Loc
         ["GlobalSpeedLimitPrompt"] = "Limite di velocità generale (KB/s). Tutti i download insieme restano sotto questa velocità.",
         ["GlobalLimitActive"] = "Un limite di velocità generale è attivo: tutti i download sono limitati a {0}/s (disattivalo con il pulsante «Limite di velocità» nella barra degli strumenti).",
         ["SpeedLimitCustom"] = "Personalizzato…",
+        ["GentleOnPc"] = "Mantieni reattivo il PC: scarica con priorità bassa di CPU e disco (consigliato)",
         ["EtaDays"] = "{0} g {1} h",
         ["UpdBusy"] = "GitHub sta limitando le richieste; PDM riproverà più tardi.",
         ["LangAuto"] = "Automatica (lingua di Windows)",

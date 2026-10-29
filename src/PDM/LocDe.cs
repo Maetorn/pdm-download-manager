@@ -297,6 +297,7 @@ public static partial class Loc
         ["GlobalSpeedLimitPrompt"] = "Allgemeines Tempolimit (KB/s). Alle Downloads zusammen bleiben unter dieser Geschwindigkeit.",
         ["GlobalLimitActive"] = "Ein allgemeines Tempolimit ist an: alle Downloads zusammen sind auf {0}/s begrenzt (mit der Schaltfläche „Tempolimit“ in der Symbolleiste ausschalten).",
         ["SpeedLimitCustom"] = "Benutzerdefiniert…",
+        ["GentleOnPc"] = "PC flüssig halten: Downloads mit niedriger CPU- und Festplattenpriorität ausführen (empfohlen)",
         ["EtaDays"] = "{0} T {1} Std",
         ["UpdBusy"] = "GitHub begrenzt gerade Anfragen; PDM versucht es später erneut.",
         ["LangAuto"] = "Automatisch (Windows-Sprache)",

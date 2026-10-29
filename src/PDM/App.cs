@@ -553,10 +553,49 @@ internal sealed class PdmApp : Application
     /// <summary>Keeps Windows from sleeping while something downloads (screen may still turn off).</summary>
     public void UpdatePowerState()
     {
+        UpdateBackgroundMode();
+        LogLoad();
         var want = Settings.PreventSleep && Manager.ActiveCount > 0;
         if (want == _keepAwake) return;
         _keepAwake = want;
         Native.SetThreadExecutionState(want ? Native.ES_CONTINUOUS | Native.ES_SYSTEM_REQUIRED : Native.ES_CONTINUOUS);
+    }
+
+    private bool _background;
+    private DateTime _loadAt = DateTime.UtcNow;
+    private TimeSpan _loadCpu;
+
+    /// <summary>
+    /// While something downloads, one line every 30 s in the log: how much CPU PDM itself used, its memory and its speed.
+    /// If the PC feels slow during downloads, the log shows whether PDM is the one using the CPU (it normally is a few
+    /// percent) or whether the load is elsewhere (disk, antivirus, network).
+    /// </summary>
+    private void LogLoad()
+    {
+        if (Manager.ActiveCount == 0) { _loadAt = DateTime.UtcNow; return; }
+        var now = DateTime.UtcNow;
+        if (now - _loadAt < TimeSpan.FromSeconds(30)) return;
+        try
+        {
+            using var me = System.Diagnostics.Process.GetCurrentProcess();
+            var cpu = me.TotalProcessorTime;
+            var share = _loadCpu == TimeSpan.Zero ? 0 : (cpu - _loadCpu).TotalSeconds / (now - _loadAt).TotalSeconds / Environment.ProcessorCount * 100;
+            Log.Info($"Load: PDM CPU {share:0.0}% of the PC, memory {me.WorkingSet64 / (1024 * 1024)} MB, threads {me.Threads.Count}, " +
+                     $"downloads {Manager.ActiveCount}, speed {Ui.Speed(Manager.TotalSpeed)}, background priority {(_background ? "on" : "off")}");
+            _loadCpu = cpu;
+        }
+        catch { }
+        _loadAt = now;
+    }
+
+    /// <summary>Low CPU / disk / memory priority while something downloads (setting "keep the PC responsive").</summary>
+    private void UpdateBackgroundMode()
+    {
+        var want = Settings.GentleOnPc && Manager.ActiveCount > 0;
+        if (want == _background) return;
+        if (Native.SetBackgroundMode(want)) _background = want;
+        else if (!want) _background = false;
+        Log.Info("Background priority " + (_background ? "on" : "off"));
     }
 
     private static readonly int[] SpeedPresetsKBps = [512, 1024, 2048, 5120, 10240];

@@ -61,6 +61,24 @@ internal static class Native
 
     public const uint ES_CONTINUOUS = 0x80000000, ES_SYSTEM_REQUIRED = 0x00000001;
 
+    // ---- priority ----
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetPriorityClass(IntPtr process, uint priorityClass);
+
+    private const uint PROCESS_MODE_BACKGROUND_BEGIN = 0x00100000, PROCESS_MODE_BACKGROUND_END = 0x00200000;
+
+    /// <summary>
+    /// Background mode for this process: the system lowers its CPU, disk (I/O) and memory-page priority so that what the
+    /// user is doing in the foreground is served first. Ended again when nothing downloads.
+    /// </summary>
+    public static bool SetBackgroundMode(bool on)
+    {
+        try { return SetPriorityClass(GetCurrentProcess(), on ? PROCESS_MODE_BACKGROUND_BEGIN : PROCESS_MODE_BACKGROUND_END); }
+        catch { return false; }
+    }
+
     // ---- memory ----
 
     /// <summary>(-1, -1) moves the process's unused pages out of RAM; they come back on demand.</summary>

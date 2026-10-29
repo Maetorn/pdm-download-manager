@@ -108,6 +108,10 @@ Without a signature "Add to Firefox" opens `about:debugging`: use **Load Tempora
 - **Closed PDM stays closed:** after you close PDM yourself (tray → Exit), browser downloads stay in the browser and
   PDM is not started again for them. Things you ask for yourself (context menu, the video button, "Open PDM") still
   start it, and starting PDM again turns the capture back on.
+- **Keeps the PC responsive:** while downloads run, PDM works in Windows' background mode (low CPU, disk and memory
+  priority), so typing, browsing and games come first and downloads use what is left. Settings → General can turn it
+  off. While something downloads, the log (`%LOCALAPPDATA%\PDM\logs`) gets one "Load:" line every 30 s with PDM's CPU
+  share, memory and speed, to see whether PDM or something else (disk, antivirus, network) loads the PC.
 - **Speed limit:** the toolbar's Speed Limit button (and the tray item) opens a menu: no limit, 512 KB/s, 1, 2, 5,
   10 MB/s or a value of your own, with the current choice ticked. The button shows the value while a limit is on, and
   the download windows say that a global limit is active.
