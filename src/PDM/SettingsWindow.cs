@@ -21,7 +21,7 @@ internal sealed class SettingsWindow : PdmWindow
     // general
     private readonly ComboBox _lang = new() { MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly ComboBox _theme = new() { MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Left };
-    private readonly CheckBox _startWin, _tray, _notify, _clip, _progressWin, _completeWin, _preventSleep, _autoRetry;
+    private readonly CheckBox _startWin, _tray, _notify, _clip, _progressWin, _completeWin, _preventSleep, _autoRetry, _gentle;
     // files
     private readonly TextBox _folder = new() { Padding = new Thickness(4) };
     private readonly CheckBox _catFolders, _autoRename, _autoExtract, _deleteArchive;
@@ -65,6 +65,7 @@ internal sealed class SettingsWindow : PdmWindow
         _clip = Ui.Check(Loc.T("ClipboardMonitor"), _s.ClipboardMonitor);
         _progressWin = Ui.Check(Loc.T("ShowProgressWindow"), _s.ShowProgressWindow);
         _preventSleep = Ui.Check(Loc.T("PreventSleep"), _s.PreventSleep);
+        _gentle = Ui.Check(Loc.T("GentleOnPc"), _s.GentleOnPc);
         _autoRetry = Ui.Check(Loc.T("AutoRetry"), _s.AutoRetry);
         _completeWin = Ui.Check(Loc.T("ShowCompleteDialog"), _s.ShowCompleteDialog);
         _catFolders = Ui.Check(Loc.T("CategoryFolders"), _s.UseCategoryFolders);
@@ -119,7 +120,7 @@ internal sealed class SettingsWindow : PdmWindow
         foreach (var (k, v) in new[] { ("ThemeSystem", "System"), ("ThemeLight", "Light"), ("ThemeDark", "Dark") })
             _theme.Items.Add(new ComboBoxItem { Content = Loc.T(k), Tag = v });
         _theme.SelectedIndex = _s.Theme switch { "Light" => 1, "Dark" => 2, _ => 0 };
-        return Panel(Ui.Field(Loc.T("Language"), _lang, 220), Ui.Field(Loc.T("Theme"), _theme, 220), _startWin, _tray, _notify, _progressWin, _completeWin, _clip, _preventSleep, _autoRetry);
+        return Panel(Ui.Field(Loc.T("Language"), _lang, 220), Ui.Field(Loc.T("Theme"), _theme, 220), _startWin, _tray, _notify, _progressWin, _completeWin, _clip, _preventSleep, _gentle, _autoRetry);
     }
 
     private UIElement Files()
@@ -341,6 +342,7 @@ internal sealed class SettingsWindow : PdmWindow
         _s.ShowProgressWindow = _progressWin.IsChecked == true;
         _s.ShowCompleteDialog = _completeWin.IsChecked == true;
         _s.PreventSleep = _preventSleep.IsChecked == true;
+        _s.GentleOnPc = _gentle.IsChecked == true;
         _s.AutoRetry = _autoRetry.IsChecked == true;
         _s.DownloadFolder = folder;
         _s.UseCategoryFolders = _catFolders.IsChecked == true;

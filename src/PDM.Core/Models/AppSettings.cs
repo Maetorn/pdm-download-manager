@@ -49,6 +49,9 @@ public sealed class AppSettings
     public bool ClipboardMonitor { get; set; } = true;
     /// <summary>Keep Windows from sleeping while something downloads.</summary>
     public bool PreventSleep { get; set; } = true;
+    /// <summary>While downloads run, PDM works in Windows' background mode: low CPU, disk and memory priority, so the rest of
+    /// the PC (typing, browsing, games) is served first and downloads only use what is left over.</summary>
+    public bool GentleOnPc { get; set; } = true;
     /// <summary>Try failed downloads again by themselves when the connection or the server comes back.</summary>
     public bool AutoRetry { get; set; } = true;
     /// <summary>Show the IDM-style progress window when a single download starts.</summary>

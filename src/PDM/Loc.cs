@@ -375,6 +375,8 @@ public static partial class Loc
         ["GlobalLimitActive"] = ("Genel hız sınırı açık: tüm indirmeler en çok {0}/s hızla iner (araç çubuğu → Hız Sınırı ile kapatın).",
                      "A global speed limit is on: all downloads together are capped at {0}/s (turn it off with the Speed Limit button in the toolbar)."),
         ["SpeedLimitCustom"] = ("Özel…", "Custom…"),
+        ["GentleOnPc"] = ("Bilgisayarı yavaşlatma: indirmeler düşük işlemci/disk önceliğiyle çalışsın (önerilir)",
+                     "Keep the PC responsive: run downloads at low CPU and disk priority (recommended)"),
         ["EtaDays"] = ("{0}g {1}sa", "{0}d {1}h"),
         ["UpdBusy"] = ("GitHub şu an çok fazla istek alıyor; PDM daha sonra yeniden dener.", "GitHub is limiting requests right now; PDM will try again later."),
         ["LangAuto"] = ("Otomatik (Windows dili)", "Automatic (Windows language)"),
