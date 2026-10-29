@@ -55,6 +55,7 @@ internal sealed class AddDownloadWindow : PdmWindow
         : this(app, batch.FirstOrDefault() ?? new AddRequest(), batch, pending) { }
 
     private readonly IReadOnlyList<DownloadItem> _pending;
+    private bool _submitted;
 
     private AddDownloadWindow(PdmApp app, AddRequest template, List<AddRequest>? batch, IReadOnlyList<DownloadItem>? pending)
     {
@@ -128,6 +129,9 @@ internal sealed class AddDownloadWindow : PdmWindow
         };
         Closed += (_, _) =>
         {
+            // A window for a download handed over by the browser that is closed without Download: remember the link,
+            // so the second time it is left to the browser instead of asking again.
+            if (!_submitted && _pending.Count > 0) foreach (var p in _pending) _app.NoteLinkCancelled(p.Url);
             _probeCts?.Cancel(); _checkCts?.Cancel(); _debounce.Stop();
             DropPending(); // Download replaced them; Cancel or closing the window means the user does not want them
         };
@@ -501,6 +505,8 @@ internal sealed class AddDownloadWindow : PdmWindow
             Ui.Info(this, Loc.F("ErrUnknown", ex.Message), "PDM", MessageBoxImage.Error);
             return;
         }
+        _submitted = true;
+        if (_pending.Count > 0) foreach (var p in _pending) _app.NoteLinkAccepted(p.Url);
         Close();
     }
 

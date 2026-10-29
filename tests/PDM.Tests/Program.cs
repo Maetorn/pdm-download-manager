@@ -82,6 +82,7 @@ internal static class Program
         await RunAsync("Cookies sent only to their own host across redirects", TestCookiesScoped);
         await RunAsync("Speed limit 1 MB/s is respected", TestSpeedLimit);
         await RunAsync("Speed limits: a download's own low limit does not use up the shared limit of the others", TestSharedLimitNotWasted);
+        await RunAsync("Speed limits: two downloads together stay under the one shared limit", TestSharedLimitTotal);
         await RunAsync("Probe: name from Content-Disposition (UTF-8), size", TestProbe);
         await RunAsync("Manager: add → complete → renamed, Mark-of-the-Web, saved list", TestManagerEndToEnd);
         await RunAsync("Manager: expected SHA-256 mismatch → error", TestManagerHashMismatch);
@@ -105,6 +106,7 @@ internal static class Program
             await RunAsync("4 Native host exe: extension message → pipe → reply", () => TestNativeHost(hostExe));
             await RunAsync("4b Native host exe: rejects bad origin argument", () => TestNativeHostBadOrigin(hostExe));
             await RunAsync("4c Native host exe: Firefox (manifest path + our add-on ID) accepted, other add-ons refused", () => TestNativeHostFirefox(hostExe));
+            await RunAsync("4d Native host exe: after the user closed PDM an automatic capture is not answered by starting it again", () => TestNativeHostClosedByUser(hostExe));
         }
         else
         {
@@ -1022,6 +1024,22 @@ internal static class Program
         Assert(sw.Elapsed.TotalSeconds < 3.5, $"B took {sw.Elapsed.TotalSeconds:F2}s for 4 MB under a 2 MB/s shared limit (A wasted the shared limit)");
     }
 
+    private static async Task TestSharedLimitTotal()
+    {
+        // 6 MB in total through one 2 MB/s limiter: the pair must take about 3 s, not 1.5 s (a limit that is applied per
+        // download or leaks would let the sum exceed it).
+        var shared = new SpeedLimiter { BytesPerSecond = 2 * 1024 * 1024 };
+        const long size = 3L * 1024 * 1024;
+        var sw = Stopwatch.StartNew();
+        var a = Download($"{_srv.Base}/file/{size}", 4, limiter: shared);
+        var b = Download($"{_srv.Base}/file/{size + 1}", 4, limiter: shared);
+        await Task.WhenAll(a, b);
+        sw.Stop();
+        Assert(a.Result.outcome.Completed && b.Result.outcome.Completed, "both completed");
+        Assert(sw.Elapsed.TotalSeconds >= 2.4, $"6 MB took {sw.Elapsed.TotalSeconds:F2}s under a 2 MB/s shared limit: the sum exceeded the limit");
+        Assert(sw.Elapsed.TotalSeconds < 6, $"took {sw.Elapsed.TotalSeconds:F2}s, too slow");
+    }
+
     private static async Task TestProbe()
     {
         var info = await HttpDownloader.ProbeAsync(new DownloadJob { Url = new Uri($"{_srv.Base}/file/777777?mode=name") }, CancellationToken.None);
@@ -1534,6 +1552,28 @@ internal static class Program
         using var p = Process.Start(psi)!;
         await p.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
         Eq(2, p.ExitCode, "another add-on is refused");
+    }
+
+    private static async Task TestNativeHostClosedByUser(string hostExe)
+    {
+        // No PDM is listening (a test server that is stopped again at once proves the pipe name is free).
+        using (var probe = new PipeServer(AppPaths.PipeName, _ => Task.FromResult(BridgeProtocol.Ok())))
+        {
+            probe.Start();
+            if (!probe.Running) throw new Exception("PDM app seems to be running (pipe name taken) — close it to run this test");
+        }
+        var flag = Path.Combine(Path.GetDirectoryName(hostExe)!, "closed-by-user.flag");
+        File.WriteAllText(flag, "test");
+        try
+        {
+            var capture = await TalkToHost(hostExe, ExtensionInfo.Origin, Encoding.UTF8.GetBytes("{\"type\":\"download\",\"source\":\"capture\",\"items\":[{\"url\":\"https://example.com/a.zip\"}]}"));
+            using var c = JsonDocument.Parse(capture!);
+            Eq("closed-by-user", c.RootElement.GetProperty("error").GetString(), "capture: PDM is not started again, the browser keeps the download");
+            var ping = await TalkToHost(hostExe, ExtensionInfo.Origin, Encoding.UTF8.GetBytes("{\"type\":\"ping\"}"));
+            using var p = JsonDocument.Parse(ping!);
+            Eq("closed-by-user", p.RootElement.GetProperty("error").GetString(), "ping says why");
+        }
+        finally { File.Delete(flag); }
     }
 
     private static async Task TestNativeHostBadOrigin(string hostExe)

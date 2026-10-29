@@ -29,6 +29,9 @@
   "popupNotRunning": {
     "message": "PDM çalışmıyor (indirme gelince açılır)"
   },
+  "popupClosed": {
+    "message": "PDM'yi siz kapattınız. PDM'yi yeniden başlatana kadar indirmeler tarayıcıda kalır."
+  },
   "popupNotInstalled": {
     "message": "PDM bulunamadı. PDM'yi kurup bir kez çalıştırın."
   },

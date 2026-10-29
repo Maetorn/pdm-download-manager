@@ -29,6 +29,9 @@
   "popupNotRunning": {
     "message": "PDM non è in esecuzione (si avvia quando arriva un download)"
   },
+  "popupClosed": {
+    "message": "Hai chiuso PDM. I download restano nel browser finché non riavvii PDM."
+  },
   "popupNotInstalled": {
     "message": "PDM non trovato. Installa PDM e avvialo una volta."
   },

@@ -29,6 +29,9 @@
   "popupNotRunning": {
     "message": "PDM n'est pas lancé (il démarre à l'arrivée d'un téléchargement)"
   },
+  "popupClosed": {
+    "message": "Vous avez fermé PDM. Les téléchargements restent dans le navigateur jusqu'à ce que vous relanciez PDM."
+  },
   "popupNotInstalled": {
     "message": "PDM introuvable. Installez PDM et lancez-le une fois."
   },
