@@ -82,6 +82,7 @@ internal static class Program
         await RunAsync("Cookies sent only to their own host across redirects", TestCookiesScoped);
         await RunAsync("Speed limit 1 MB/s is respected", TestSpeedLimit);
         await RunAsync("Speed limits: a download's own low limit does not use up the shared limit of the others", TestSharedLimitNotWasted);
+        await RunAsync("Speed limits: two downloads together stay under the one shared limit", TestSharedLimitTotal);
         await RunAsync("Probe: name from Content-Disposition (UTF-8), size", TestProbe);
         await RunAsync("Manager: add → complete → renamed, Mark-of-the-Web, saved list", TestManagerEndToEnd);
         await RunAsync("Manager: expected SHA-256 mismatch → error", TestManagerHashMismatch);
@@ -1021,6 +1022,22 @@ internal static class Program
         Assert(o.Completed, "completed");
         Eq(TestServer.ExpectedSha(size), Sha(path), "sha256");
         Assert(sw.Elapsed.TotalSeconds < 3.5, $"B took {sw.Elapsed.TotalSeconds:F2}s for 4 MB under a 2 MB/s shared limit (A wasted the shared limit)");
+    }
+
+    private static async Task TestSharedLimitTotal()
+    {
+        // 6 MB in total through one 2 MB/s limiter: the pair must take about 3 s, not 1.5 s (a limit that is applied per
+        // download or leaks would let the sum exceed it).
+        var shared = new SpeedLimiter { BytesPerSecond = 2 * 1024 * 1024 };
+        const long size = 3L * 1024 * 1024;
+        var sw = Stopwatch.StartNew();
+        var a = Download($"{_srv.Base}/file/{size}", 4, limiter: shared);
+        var b = Download($"{_srv.Base}/file/{size + 1}", 4, limiter: shared);
+        await Task.WhenAll(a, b);
+        sw.Stop();
+        Assert(a.Result.outcome.Completed && b.Result.outcome.Completed, "both completed");
+        Assert(sw.Elapsed.TotalSeconds >= 2.4, $"6 MB took {sw.Elapsed.TotalSeconds:F2}s under a 2 MB/s shared limit: the sum exceeded the limit");
+        Assert(sw.Elapsed.TotalSeconds < 6, $"took {sw.Elapsed.TotalSeconds:F2}s, too slow");
     }
 
     private static async Task TestProbe()
