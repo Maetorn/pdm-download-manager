@@ -127,6 +127,13 @@ internal sealed class ProgressWindow : PdmWindow
         root.Children.Add(Ui.Field(Loc.T("TimeLeft"), _eta, 170));
         root.Children.Add(Ui.Field(Loc.T("ResumeCapability"), _resume, 170));
         root.Children.Add(Ui.Field(Loc.T("SpeedLimitToggle"), SpeedLimitRow(), 170));
+        if (app.Settings.SpeedLimitKBps > 0)
+        {
+            // The global limit caps every download: say so here, where the speed is looked at.
+            var warn = Ui.Text(Loc.F("GlobalLimitActive", Ui.Size(app.Settings.SpeedLimitKBps * 1024L)), 12, brush: Theme.Bad, wrap: true);
+            warn.Margin = new Thickness(0, 0, 0, 6);
+            root.Children.Add(warn);
+        }
         root.Children.Add(_progress);
 
         // Buttons like IDM: details toggle on the left, Pause / Cancel on the right.

@@ -77,7 +77,8 @@ internal sealed partial class MainWindow : PdmWindow
         tools.Children.Add(Separator());
         tools.Children.Add(Ui.ToolButton("", Loc.T("Video"), (_, _) => OpenVideo()));
         tools.Children.Add(Ui.ToolButton("", Loc.T("Settings"), (_, _) => new SettingsWindow(_app) { Owner = this }.ShowDialog()));
-        tools.Children.Add(Ui.ToolButton("\uE916", Loc.T("SpeedLimitToggle"), (_, _) => _app.ToggleSpeedLimit()));
+        _speedButton = Ui.ToolButton("\uE916", Loc.T("SpeedLimitToggle"), (_, _) => { _app.ToggleSpeedLimit(this); UpdateSpeedButton(); });
+        tools.Children.Add(_speedButton);
         tools.Children.Add(Ui.ToolButton("\uE712", Loc.T("More"), (s, _) => ShowMoreMenu((Button)s)));
 
         _search = new TextBox { Width = 220, VerticalAlignment = VerticalAlignment.Center, Padding = new Thickness(4, 3, 4, 3), ToolTip = Loc.T("Search") };
@@ -443,6 +444,7 @@ internal sealed partial class MainWindow : PdmWindow
             var n = items.Count(i => Matches(i, key));
             _catCounts[key].Text = n > 0 ? n.ToString(CultureInfo.CurrentCulture) : "";
         }
+        UpdateSpeedButton();
         var speed = speed0;
         _statusLeft.Text = Loc.F("StatusBarActive", _m.ActiveCount, string.IsNullOrEmpty(speed) ? "0 B/s" : speed);
         var limit = _app.Settings.SpeedLimitKBps > 0 ? Loc.F("StatusBarLimit", Ui.Size(_app.Settings.SpeedLimitKBps * 1024L)) : Loc.T("NoLimit");
@@ -452,6 +454,23 @@ internal sealed partial class MainWindow : PdmWindow
     }
 
     private bool? _browserOk;
+    private Button? _speedButton;
+
+    /// <summary>While a global speed limit is on, the button says so (with the value) and is highlighted: a forgotten
+    /// limit must be easy to see.</summary>
+    private void UpdateSpeedButton()
+    {
+        if (_speedButton == null) return;
+        var kbps = _app.Settings.SpeedLimitKBps;
+        if (_speedButton.Content is StackPanel { Children.Count: 2 } sp && sp.Children[1] is TextBlock caption)
+        {
+            var text = kbps > 0 ? Loc.F("SpeedLimitOn", Ui.Size(kbps * 1024L)) : Loc.T("SpeedLimitToggle");
+            if (caption.Text != text) caption.Text = text;
+        }
+        _speedButton.SetResourceReference(Control.BackgroundProperty, kbps > 0 ? Theme.Sel : Theme.Panel);
+        _speedButton.SetResourceReference(Control.BorderBrushProperty, kbps > 0 ? Theme.Accent : Theme.Panel);
+        _speedButton.BorderThickness = new Thickness(kbps > 0 ? 1 : 0);
+    }
 
     /// <summary>The browser bridge was (re)registered: check it again on the next refresh.</summary>
     public void ResetBrowserStatus() => _browserOk = null;

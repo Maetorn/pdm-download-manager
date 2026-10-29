@@ -70,12 +70,13 @@ internal static partial class Program
 
     private static async Task<byte[]> ForwardAsync(string pipeName, string origin, byte[] message)
     {
-        string type;
+        string type, source;
         try
         {
             using var doc = JsonDocument.Parse(message, new JsonDocumentOptions { MaxDepth = 16 });
             if (doc.RootElement.ValueKind != JsonValueKind.Object) return Error("bad-json");
             type = doc.RootElement.TryGetProperty("type", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() ?? "" : "";
+            source = doc.RootElement.TryGetProperty("source", out var so) && so.ValueKind == JsonValueKind.String ? so.GetString() ?? "" : "";
         }
         catch (JsonException)
         {
@@ -99,7 +100,12 @@ internal static partial class Program
         if (reply != null) return reply;
 
         // App not running: start it for actions that need it, then retry for a while.
-        if (type is not ("download" or "video" or "show")) return Error("not-running");
+        // The user closed PDM on purpose (the app leaves this marker, removed when PDM starts): an automatic capture of a
+        // browser download must not start it again; the browser keeps the download. Things the user asks for
+        // themselves (context menu, video button, "Open PDM") still start it.
+        var closedByUser = File.Exists(Path.Combine(AppContext.BaseDirectory, "closed-by-user.flag"));
+        if (type is not ("download" or "video" or "show")) return Error(closedByUser ? "closed-by-user" : "not-running");
+        if (closedByUser && type == "download" && source == "capture") return Error("closed-by-user");
         if (!LaunchApp()) return Error("not-installed");
         var until = DateTime.UtcNow.AddSeconds(25);
         while (DateTime.UtcNow < until)

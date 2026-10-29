@@ -31,7 +31,8 @@ function showStatus(resp) {
   } else {
     const err = resp && resp.error;
     const notInstalled = /not found|not-installed|Specified native messaging host/i.test(err || '');
-    el.textContent = notInstalled ? msg('popupNotInstalled') : msg('popupNotRunning');
+    const closed = /closed-by-user/i.test(err || '');
+    el.textContent = notInstalled ? msg('popupNotInstalled') : closed ? msg('popupClosed') : msg('popupNotRunning');
     el.className = notInstalled ? 'bad' : 'muted';
   }
 }

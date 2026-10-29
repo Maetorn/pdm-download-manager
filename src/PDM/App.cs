@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
@@ -64,6 +65,7 @@ internal sealed class PdmApp : Application
         AppDomain.CurrentDomain.UnhandledException += (_, ex) => Log.Error("Fatal", ex.ExceptionObject as Exception);
         TaskScheduler.UnobservedTaskException += (_, ex) => { Log.Error("Unobserved task", ex.Exception); ex.SetObserved(); };
 
+        try { File.Delete(ClosedByUserFlag); } catch { } // started: the bridge may reach PDM again
         Settings = Store.LoadSettings();
 #if UI_TOUR
         var tour = UiTour.Requested(_startArgs, out var tourDir, out var tourLang, out var tourTheme);
@@ -179,6 +181,29 @@ internal sealed class PdmApp : Application
     }
 
     /// <summary>True when PDM took the download(s): saved in the list (and shown in its add window when asked).</summary>
+    // Links the user cancelled in PDM's own window. Like IDM: after the second cancel of the same link PDM stops
+    // asking and lets the browser download it (the bridge answers "declined", the browser keeps its download).
+    private readonly Dictionary<string, (int Cancels, DateTime At)> _cancelled = new(StringComparer.Ordinal);
+    private static readonly TimeSpan CancelMemory = TimeSpan.FromHours(24);
+    private const int CancelsBeforeDeclining = 2;
+
+    private static string LinkKey(string url) => url.Split('#')[0].Trim().TrimEnd('/');
+
+    /// <summary>The user cancelled PDM's window for this link (or closed it).</summary>
+    public void NoteLinkCancelled(string url)
+    {
+        var key = LinkKey(url);
+        var n = _cancelled.TryGetValue(key, out var c) && DateTime.UtcNow - c.At < CancelMemory ? c.Cancels : 0;
+        _cancelled[key] = (n + 1, DateTime.UtcNow);
+        if (_cancelled.Count > 200) foreach (var old in _cancelled.Where(k => DateTime.UtcNow - k.Value.At > CancelMemory).Select(k => k.Key).ToList()) _cancelled.Remove(old);
+    }
+
+    /// <summary>The user took this link (Download / Download later): forget earlier cancels.</summary>
+    public void NoteLinkAccepted(string url) => _cancelled.Remove(LinkKey(url));
+
+    private bool LinkDeclined(string url) =>
+        _cancelled.TryGetValue(LinkKey(url), out var c) && c.Cancels >= CancelsBeforeDeclining && DateTime.UtcNow - c.At < CancelMemory;
+
     private bool HandleDownloads(DownloadMessage m)
     {
         try
@@ -186,6 +211,11 @@ internal sealed class PdmApp : Application
             if (m.Items.Count == 1)
             {
                 var req = m.Items[0];
+                if ((m.Interactive || Settings.ShowDialogForBrowserDownloads) && LinkDeclined(req.Url))
+                {
+                    Log.Info("Browser download left to the browser: cancelled twice in PDM");
+                    return false; // not taken: the extension keeps the download in the browser
+                }
                 if (m.Interactive || Settings.ShowDialogForBrowserDownloads)
                 {
                     // Saved before the browser hears "ok" (it then cancels its own copy): nothing is lost even if PDM
@@ -431,7 +461,7 @@ internal sealed class PdmApp : Application
         if (action == PostQueueAction.None) return;
         // Exit / sleep / shut down only when nothing else is still downloading.
         if (Manager.ActiveCount > 0) return;
-        if (action == PostQueueAction.ExitApp) { _ = ExitAsync(ask: false); return; }
+        if (action == PostQueueAction.ExitApp) { _ = ExitAsync(ask: false, byUser: true); return; }
         new CountdownWindow(this, action).ShowAndActivate();
     }
 
@@ -529,8 +559,9 @@ internal sealed class PdmApp : Application
         Native.SetThreadExecutionState(want ? Native.ES_CONTINUOUS | Native.ES_SYSTEM_REQUIRED : Native.ES_CONTINUOUS);
     }
 
-    /// <summary>Quick switch for the global speed limit (remembers the last value).</summary>
-    public void ToggleSpeedLimit()
+    /// <summary>Quick switch for the global speed limit. Turning it on asks for the value (it used to switch on at the last
+    /// value, 1 MB/s by default, without a word, which looked like PDM being slow).</summary>
+    public void ToggleSpeedLimit(Window? owner = null)
     {
         if (Settings.SpeedLimitKBps > 0)
         {
@@ -539,7 +570,11 @@ internal sealed class PdmApp : Application
         }
         else
         {
-            Settings.SpeedLimitKBps = Settings.LastSpeedLimitKBps > 0 ? Settings.LastSpeedLimitKBps : 1024;
+            var initial = (Settings.LastSpeedLimitKBps > 0 ? Settings.LastSpeedLimitKBps : 1024).ToString(CultureInfo.InvariantCulture);
+            var text = Ui.Prompt(owner ?? PdmWindow.VisibleOwner(), Loc.T("SpeedLimitToggle"), Loc.T("GlobalSpeedLimitPrompt"), initial);
+            if (text == null) return; // cancelled: stays unlimited
+            if (!int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var kbps) || kbps <= 0) return;
+            Settings.SpeedLimitKBps = kbps;
         }
         SaveSettings();
         Tray.Balloon("PDM", Settings.SpeedLimitKBps > 0 ? Loc.F("StatusBarLimit", Ui.Size(Settings.SpeedLimitKBps * 1024L)) : Loc.T("NoLimit"), System.Windows.Forms.ToolTipIcon.None);
@@ -695,11 +730,22 @@ internal sealed class PdmApp : Application
 
     // ---------------- exit ----------------
 
-    public async Task ExitAsync(bool ask)
+    /// <summary>
+    /// A marker next to the browser bridge: PDM was closed by the user (tray Exit, close without tray, "exit when the
+    /// queue is done"). While it exists the bridge does not start PDM again for a browser download, so the browser
+    /// keeps the download. It is removed whenever PDM starts. Updates and Windows log-off do not set it.
+    /// </summary>
+    public static string ClosedByUserFlag => Path.Combine(AppPaths.HostDir, "closed-by-user.flag");
+
+    public async Task ExitAsync(bool ask, bool? byUser = null)
     {
         if (_exiting) return;
         var active = Manager.ActiveCount;
         if (ask && active > 0 && !Ui.Confirm(PdmWindow.VisibleOwner(), Loc.F("ExitWhileActive", active), "PDM")) return;
+        if (byUser ?? ask)
+        {
+            try { Directory.CreateDirectory(AppPaths.HostDir); File.WriteAllText(ClosedByUserFlag, DateTime.Now.ToString("o")); } catch { }
+        }
         _exiting = true;
         Log.Info("Exiting");
         _scheduleTimer?.Stop();
