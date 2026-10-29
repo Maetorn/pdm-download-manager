@@ -1,0 +1,28 @@
+main	WINDOW	PDM — Gestore download
+menu-list	WINDOW	(menu)
+menu-more	WINDOW	(menu)
+menu-speed	WINDOW	(menu)
+add	WINDOW	Nuovo download
+add-duplicate	WINDOW	PDM
+add-batch	WINDOW	3 link
+settings-0	WINDOW	Impostazioni
+settings-1	WINDOW	Impostazioni
+settings-2	WINDOW	Impostazioni
+settings-3	WINDOW	Impostazioni
+settings-4	WINDOW	Impostazioni
+settings-5	WINDOW	Impostazioni
+settings-6	WINDOW	Impostazioni
+settings-7	WINDOW	Impostazioni
+settings-8	WINDOW	Impostazioni
+login	WINDOW	Aggiungi accesso…
+scheduler	WINDOW	Code e pianificazione
+history	WINDOW	Cronologia e statistiche
+video	WINDOW	Scarica video
+grabber	WINDOW	Grabber di siti…
+details	WINDOW	Dettagli download — ubuntu-24.04-desktop-amd64.iso
+progress	WINDOW	39% ubuntu-24.04-desktop-amd64.iso
+complete	WINDOW	Download completato
+convert	WINDOW	Converti in MP3 (audio)
+countdown	WINDOW	PDM
+extension-guide	WINDOW	Installare l'estensione del browser
+setup	WINDOW	Installazione di PDM
