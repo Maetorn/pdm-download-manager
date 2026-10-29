@@ -26,7 +26,21 @@ internal sealed class Tray : IDisposable
         menu.Items.Add(Loc.T("TrayOpen"), null, (_, _) => _app.ShowMain());
         menu.Items.Add(Loc.T("TrayAdd"), null, (_, _) => new AddDownloadWindow(_app, new Core.Engine.AddRequest()).ShowAndActivate());
         menu.Items.Add(Loc.T("TrayPauseAll"), null, (_, _) => _app.Manager.PauseAll());
-        menu.Items.Add(Loc.T("SpeedLimitToggle"), null, (_, _) => _app.ToggleSpeedLimit());
+        var speed = new WF.ToolStripMenuItem(Loc.T("SpeedLimitToggle"));
+        speed.DropDownOpening += (_, _) =>
+        {
+            // Rebuilt every time it opens, so the current limit is the ticked one.
+            speed.DropDownItems.Clear();
+            foreach (var (text, isChecked, run) in _app.SpeedLimitChoices(null))
+            {
+                var action = run;
+                var item = new WF.ToolStripMenuItem(text) { Checked = isChecked };
+                item.Click += (_, _) => action();
+                speed.DropDownItems.Add(item);
+            }
+        };
+        speed.DropDownItems.Add(string.Empty); // gives the item an arrow; replaced when it opens
+        menu.Items.Add(speed);
         menu.Items.Add(new WF.ToolStripSeparator());
         menu.Items.Add(Loc.T("TrayExit"), null, (_, _) => _ = _app.ExitAsync(ask: true));
         _icon.ContextMenuStrip = menu;

@@ -559,25 +559,38 @@ internal sealed class PdmApp : Application
         Native.SetThreadExecutionState(want ? Native.ES_CONTINUOUS | Native.ES_SYSTEM_REQUIRED : Native.ES_CONTINUOUS);
     }
 
-    /// <summary>Quick switch for the global speed limit. Turning it on asks for the value (it used to switch on at the last
-    /// value, 1 MB/s by default, without a word, which looked like PDM being slow).</summary>
-    public void ToggleSpeedLimit(Window? owner = null)
+    private static readonly int[] SpeedPresetsKBps = [512, 1024, 2048, 5120, 10240];
+
+    /// <summary>Sets the global speed limit (KB/s, 0 = none). Takes effect at once.</summary>
+    public void SetGlobalSpeedLimit(int kbps)
     {
-        if (Settings.SpeedLimitKBps > 0)
-        {
-            Settings.LastSpeedLimitKBps = Settings.SpeedLimitKBps;
-            Settings.SpeedLimitKBps = 0;
-        }
-        else
-        {
-            var initial = (Settings.LastSpeedLimitKBps > 0 ? Settings.LastSpeedLimitKBps : 1024).ToString(CultureInfo.InvariantCulture);
-            var text = Ui.Prompt(owner ?? PdmWindow.VisibleOwner(), Loc.T("SpeedLimitToggle"), Loc.T("GlobalSpeedLimitPrompt"), initial);
-            if (text == null) return; // cancelled: stays unlimited
-            if (!int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var kbps) || kbps <= 0) return;
-            Settings.SpeedLimitKBps = kbps;
-        }
+        kbps = Math.Max(0, kbps);
+        if (kbps > 0) Settings.LastSpeedLimitKBps = kbps;
+        Settings.SpeedLimitKBps = kbps;
         SaveSettings();
-        Tray.Balloon("PDM", Settings.SpeedLimitKBps > 0 ? Loc.F("StatusBarLimit", Ui.Size(Settings.SpeedLimitKBps * 1024L)) : Loc.T("NoLimit"), System.Windows.Forms.ToolTipIcon.None);
+    }
+
+    /// <summary>
+    /// What the speed limit button and the tray menu offer: no limit, a few ready values and a value of your own, with
+    /// the current choice ticked. (A one-click switch that turned a limit on without saying so made PDM look slow.)
+    /// </summary>
+    public List<(string Text, bool Checked, Action Run)> SpeedLimitChoices(Window? owner)
+    {
+        var current = Settings.SpeedLimitKBps;
+        var choices = new List<(string, bool, Action)> { (Loc.T("NoLimit"), current <= 0, () => SetGlobalSpeedLimit(0)) };
+        foreach (var kbps in SpeedPresetsKBps)
+        {
+            var value = kbps;
+            choices.Add((Ui.Size(value * 1024L) + "/s", current == value, () => SetGlobalSpeedLimit(value)));
+        }
+        var custom = current > 0 && !SpeedPresetsKBps.Contains(current);
+        choices.Add((Loc.T("SpeedLimitCustom") + (custom ? $"  ({Ui.Size(current * 1024L)}/s)" : ""), custom, () =>
+        {
+            var initial = (current > 0 ? current : Settings.LastSpeedLimitKBps > 0 ? Settings.LastSpeedLimitKBps : 1024).ToString(CultureInfo.InvariantCulture);
+            var text = Ui.Prompt(owner ?? PdmWindow.VisibleOwner(), Loc.T("SpeedLimitToggle"), Loc.T("GlobalSpeedLimitPrompt"), initial);
+            if (text != null && int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var kbps) && kbps > 0) SetGlobalSpeedLimit(kbps);
+        }));
+        return choices;
     }
 
     // ---------------- clipboard ----------------

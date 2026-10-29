@@ -93,6 +93,8 @@ internal static class UiTour
         await Menu(() => { grid.ContextMenu!.PlacementTarget = grid; grid.ContextMenu.IsOpen = true; }, () => opened, "menu-list");
         var more = Descendants(app.Main).OfType<Button>().Last(b => b.ToolTip as string == Loc.T("More"));
         await Menu(() => typeof(MainWindow).GetMethod("ShowMoreMenu", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(app.Main, [more]), () => opened, "menu-more");
+        var speedButton = Descendants(app.Main).OfType<Button>().First(b => b.ToolTip as string == Loc.T("SpeedLimitToggle"));
+        await Menu(() => typeof(MainWindow).GetMethod("ShowSpeedMenu", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(app.Main, [speedButton]), () => opened, "menu-speed");
         app.Main.Hide();
 
         var add = new AddDownloadWindow(app, new AddRequest { Url = "https://download.example.org/files/sample-archive.zip" });

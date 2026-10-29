@@ -108,8 +108,9 @@ Without a signature "Add to Firefox" opens `about:debugging`: use **Load Tempora
 - **Closed PDM stays closed:** after you close PDM yourself (tray → Exit), browser downloads stay in the browser and
   PDM is not started again for them. Things you ask for yourself (context menu, the video button, "Open PDM") still
   start it, and starting PDM again turns the capture back on.
-- **Speed limit:** the toolbar's Speed Limit button asks for the limit when you turn it on, shows the value on the
-  button while it is on, and the download windows say that a global limit is active.
+- **Speed limit:** the toolbar's Speed Limit button (and the tray item) opens a menu: no limit, 512 KB/s, 1, 2, 5,
+  10 MB/s or a value of your own, with the current choice ticked. The button shows the value while a limit is on, and
+  the download windows say that a global limit is active.
 - **Context menu:** "Download with PDM" (link, image, video, audio), "Download selected links with PDM",
   "Download all links with PDM…" (filtered list), "Download this page's video with PDM".
 - **Video:** hover a video for the "Download with PDM" button. For YouTube and similar sites install the video tools

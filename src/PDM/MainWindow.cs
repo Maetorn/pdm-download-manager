@@ -77,7 +77,7 @@ internal sealed partial class MainWindow : PdmWindow
         tools.Children.Add(Separator());
         tools.Children.Add(Ui.ToolButton("", Loc.T("Video"), (_, _) => OpenVideo()));
         tools.Children.Add(Ui.ToolButton("", Loc.T("Settings"), (_, _) => new SettingsWindow(_app) { Owner = this }.ShowDialog()));
-        _speedButton = Ui.ToolButton("\uE916", Loc.T("SpeedLimitToggle"), (_, _) => { _app.ToggleSpeedLimit(this); UpdateSpeedButton(); });
+        _speedButton = Ui.ToolButton("\uE916", Loc.T("SpeedLimitToggle"), (s, _) => ShowSpeedMenu((Button)s));
         tools.Children.Add(_speedButton);
         tools.Children.Add(Ui.ToolButton("\uE712", Loc.T("More"), (s, _) => ShowMoreMenu((Button)s)));
 
@@ -455,6 +455,19 @@ internal sealed partial class MainWindow : PdmWindow
 
     private bool? _browserOk;
     private Button? _speedButton;
+
+    private void ShowSpeedMenu(Button anchor)
+    {
+        var menu = new ContextMenu { PlacementTarget = anchor, Placement = PlacementMode.Bottom };
+        foreach (var (text, isChecked, run) in _app.SpeedLimitChoices(this))
+        {
+            var mi = new MenuItem { Header = text, IsCheckable = true, IsChecked = isChecked };
+            var action = run;
+            mi.Click += (_, _) => { action(); UpdateSpeedButton(); };
+            menu.Items.Add(mi);
+        }
+        menu.IsOpen = true;
+    }
 
     /// <summary>While a global speed limit is on, the button says so (with the value) and is highlighted: a forgotten
     /// limit must be easy to see.</summary>

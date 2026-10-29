@@ -296,6 +296,7 @@ public static partial class Loc
         ["SpeedLimitOn"] = "Limite : {0}/s",
         ["GlobalSpeedLimitPrompt"] = "Limite de vitesse générale (Ko/s). L'ensemble des téléchargements reste sous cette vitesse.",
         ["GlobalLimitActive"] = "Une limite de vitesse générale est active : tous les téléchargements sont plafonnés à {0}/s (la désactiver avec le bouton « Limite de vitesse » de la barre d'outils).",
+        ["SpeedLimitCustom"] = "Personnalisé…",
         ["EtaDays"] = "{0} j {1} h",
         ["UpdBusy"] = "GitHub limite les requêtes pour le moment ; PDM réessaiera plus tard.",
         ["LangAuto"] = "Automatique (langue de Windows)",
