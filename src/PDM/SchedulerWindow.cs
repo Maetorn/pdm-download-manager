@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
+using PDM.Core;
 using PDM.Core.Models;
 
 namespace PDM;
@@ -230,6 +231,15 @@ internal sealed class CountdownWindow : PdmWindow
         Content = root;
         timer.Tick += (_, _) =>
         {
+            // New work started during the countdown (a browser download, another queue): sleeping or shutting down now
+            // would cut it off. The countdown is cancelled; the user can still choose the action again later.
+            if (app.Manager.ActiveCount > 0)
+            {
+                timer.Stop();
+                Log.Info("Post-queue action cancelled: a download started during the countdown");
+                Close();
+                return;
+            }
             remaining--;
             text.Text = Loc.F("ShutdownCountdown", remaining, actionText);
             if (remaining > 0) return;

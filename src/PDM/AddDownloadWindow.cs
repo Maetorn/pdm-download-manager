@@ -399,7 +399,7 @@ internal sealed class AddDownloadWindow : PdmWindow
             {
                 HttpRequestException { StatusCode: { } sc } => Loc.ErrorText("http:" + ((int)sc).ToString(CultureInfo.InvariantCulture)),
                 HttpRequestException => Loc.T("Unreachable"), // no answer: name not found, refused, TLS failure …
-                OperationCanceledException => Loc.T("ProbeTimeout"),
+                OperationCanceledException or TimeoutException => Loc.T("ProbeTimeout"),
                 _ => ex.Message,
             };
             _info.Text = Loc.F("ProbeFailed", reason);

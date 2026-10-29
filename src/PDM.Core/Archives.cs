@@ -27,7 +27,8 @@ public static class Archives
         if (!Extensions.Any(e => name.EndsWith(e, StringComparison.Ordinal))) return false;
         // Multi-volume RAR: only the first volume is opened (the others belong to it).
         var m = System.Text.RegularExpressions.Regex.Match(name, @"\.part(\d+)\.rar$");
-        return !m.Success || int.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) == 1;
+        // The number may be absurdly long (a hostile name): anything that does not parse is not "volume 1".
+        return !m.Success || (int.TryParse(m.Groups[1].Value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var volume) && volume == 1);
     }
 
     /// <summary>"Downloads\file.zip" → "Downloads\file" (or "file (1)" when taken).</summary>

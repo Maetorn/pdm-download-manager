@@ -217,8 +217,9 @@ Saves are atomic (temp file → `File.Replace` with `.bak`).
 - **Deno** is installed with the tools and passed as `--js-runtimes deno:<path>`. yt-dlp runs it sandboxed
   (`--no-prompt --no-remote`, no `--allow-*`).
 - **Tools:**
-  - yt-dlp, FFmpeg and Deno come only from their official GitHub releases, verified against the SHA-256 list in
-    the same release.
+  - yt-dlp and Deno come from their own projects' GitHub releases; the Windows FFmpeg build comes from
+    `yt-dlp/FFmpeg-Builds` (not from the FFmpeg project). Each file is verified against the SHA-256 list in the same
+    release, which proves it is that release's file, not who built it.
   - yt-dlp and Deno are kept up to date in the background (every 12 h, skipped while a video job runs).
 
 ### 4.5 Self-update (`UpdateService`, `UpdateClient`)
@@ -318,6 +319,8 @@ Saves are atomic (temp file → `File.Replace` with `.bak`).
   - kill on job close and on unhandled exceptions;
   - an active-process limit of 1 for FFmpeg and tar;
   - UI restrictions (no clipboard, desktop, system parameters, display settings, global atoms, exit-windows).
+  - **Limits:** this is not a file-system or network sandbox. The process is put in the job right after it starts,
+    and if that fails PDM logs it and continues. No isolation guarantee is claimed.
 - The native host grants `AllowSetForegroundWindow` only to the PID at the other end of the pipe
   (`GetNamedPipeServerProcessId`).
 
@@ -359,7 +362,8 @@ There is no remote code, no `eval`, and no network requests from the extension e
 - **Repository settings:**
   - Secret scanning and push protection, private vulnerability reporting, Dependabot alerts, CodeQL (C#,
     JS, Actions).
-  - A ruleset on `main` blocks force pushes and deletion.
+  - A ruleset on `main` blocks force pushes and deletion. It does **not** require pull-request review or passing
+    checks, so the account owner can still ship an update directly (see §9).
   - Outside contributors need approval to run workflows; the default workflow token is read-only.
 
 ---
@@ -406,6 +410,14 @@ There is no remote code, no `eval`, and no network requests from the extension e
 - **Trust model of updates:** anyone who controls the GitHub account or the `main` branch can ship an update to
   every user. Mitigated by 2FA, branch rules and the separate release job. There is no offline signing key.
 - **DRM-protected video is not supported** (by design).
+- **Browser capture limits:**
+  - A download that follows a POST (a form) stays in the browser. PDM can only repeat a GET. This is decided from
+    POST requests the extension saw in the last 5 minutes. A POST that is answered by a redirect to a different
+    file address is not recognised.
+  - Firefox container tabs send their own container's cookies, but cookies of first-party-isolated (partitioned)
+    storage are not collected.
+  - At most 500 links go in one send from the link list; the page shows how many were handed over and keeps the rest
+    ticked.
 - **MANUAL items** in TEST_RESULTS.md: real-browser flows, sleep/shutdown actions, high-DPI, language switching
   through Settings, uninstall message boxes, the extension in German/French/Italian browsers.
 

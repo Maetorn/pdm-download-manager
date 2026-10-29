@@ -171,8 +171,11 @@ public sealed partial class YtDlpRunner
             var key = $"{stream.FormatId}|{stream.Ext}|{i}";
             var saved = state.Parts.FirstOrDefault(p => p.Key == key);
 
-            // Finished in an earlier run (e.g. the picture, before a pause during the sound).
-            if (saved is { Done: true, Total: > 0 } && File.Exists(part) && new FileInfo(part).Length == saved.Total)
+            // Finished in an earlier run (e.g. the picture, before a pause during the sound). Only trusted while the new
+            // answer of yt-dlp still describes a stream of the same size: if the site re-encoded the format under the
+            // same id, an old picture must not be joined with a new sound.
+            var sameStream = stream.Size <= 0 || saved == null || stream.Size == saved.Total;
+            if (saved is { Done: true, Total: > 0 } && sameStream && File.Exists(part) && new FileInfo(part).Length == saved.Total)
             {
                 lock (_directLock)
                 {
@@ -183,7 +186,7 @@ public sealed partial class YtDlpRunner
                 parts.Add(part);
                 continue;
             }
-            var resume = saved is { Done: false, Total: > 0, Segments.Count: > 0 } && File.Exists(part);
+            var resume = saved is { Done: false, Total: > 0, Segments.Count: > 0 } && sameStream && File.Exists(part);
             if (!resume)
             {
                 TryDelete(part);

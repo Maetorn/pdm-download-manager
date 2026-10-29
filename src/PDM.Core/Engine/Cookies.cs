@@ -82,8 +82,10 @@ public static class Cookies
         return sb.ToString();
     }
 
-    private static string EscapeValue(string v) =>
-        v.IndexOfAny([';', ',']) >= 0 && !(v.StartsWith('"') && v.EndsWith('"')) ? "\"" + v.Replace("\"", "") + "\"" : v;
+    /// <summary>.NET refuses a value with ';' or ',' unless it is wrapped in quotes. Wrapping keeps the value's own
+    /// characters (inner quotes too: a server that strips the outer pair sees exactly the original).</summary>
+    public static string EscapeValue(string v) =>
+        v.IndexOfAny([';', ',']) >= 0 && !(v.Length >= 2 && v.StartsWith('"') && v.EndsWith('"')) ? "\"" + v + "\"" : v;
 
     public static string Serialize(List<CookieData> cookies) => JsonSerializer.Serialize(cookies, PdmJson.Default.ListCookieData);
 

@@ -20,8 +20,10 @@ namespace PDM.Tests;
 ///   name      – Content-Disposition with a UTF-8 file name
 ///   cookie    – require Cookie "session=abc" (403 otherwise)
 ///   forbidden – always 403
+///   hang      – accepts the request and never answers (no headers)
 /// /redirect?to=URL – 302 to URL;   /missing – 404
 /// /auth/{size} – like /file/{size} but needs Basic "user:pass" (401 otherwise)
+/// /stall.html – 200 text/html with a Content-Length, a few bytes of body and then silence (a server that stops mid-body)
 /// /site/*.html – a small web site for the grabber; /files/{name} – small files; /dl.php – a file behind a page-like link
 /// Absolute-form requests ("GET http://host/… HTTP/1.1") are served as a proxy would (counted in ProxyRequests);
 /// with RequireProxyLogin they need Proxy-Authorization "proxy:secret" (407 otherwise).
@@ -185,6 +187,12 @@ public sealed class TestServer : IDisposable
             await s.WriteAsync(body);
             return true;
         }
+        if (uri.AbsolutePath == "/stall.html")
+        {
+            await Write(s, "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: 100000\r\n\r\n<html><body>");
+            try { await Task.Delay(TimeSpan.FromSeconds(30), _cts.Token); } catch (OperationCanceledException) { }
+            return false;
+        }
         if (uri.AbsolutePath.StartsWith("/files/") || uri.AbsolutePath == "/dl.php")
         {
             var disposition = uri.AbsolutePath == "/dl.php" ? "Content-Disposition: attachment; filename=\"d.zip\"\r\n" : "";
@@ -204,6 +212,11 @@ public sealed class TestServer : IDisposable
         var seed = modes.Contains("etag2") || modes.Contains("noetag") ? 2 : 0;
         var etag = modes.Contains("etag2") ? "\"v2\"" : "\"v1\"";
 
+        if (modes.Contains("hang"))
+        {
+            try { await Task.Delay(TimeSpan.FromSeconds(30), _cts.Token); } catch (OperationCanceledException) { }
+            return false;
+        }
         if (modes.Contains("forbidden") || (modes.Contains("cookie") && !headers.GetValueOrDefault("cookie", "").Contains("session=abc")))
         {
             await Write(s, "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n");

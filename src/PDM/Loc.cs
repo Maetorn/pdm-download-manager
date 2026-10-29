@@ -368,6 +368,7 @@ public static partial class Loc
         ["SetUpdate"] = ("Güncelleme", "Updates"),
         ["UpdVersion"] = ("Yüklü sürüm", "Installed version"),
         ["UpdAuto"] = ("Güncellemeleri otomatik kur (indirme yokken; PDM kendini yeniden başlatır)", "Install updates automatically (when nothing is downloading; PDM restarts itself)"),
+        ["EtaDays"] = ("{0}g {1}sa", "{0}d {1}h"),
         ["UpdBusy"] = ("GitHub şu an çok fazla istek alıyor; PDM daha sonra yeniden dener.", "GitHub is limiting requests right now; PDM will try again later."),
         ["LangAuto"] = ("Otomatik (Windows dili)", "Automatic (Windows language)"),
         ["UpdCheckNow"] = ("Şimdi denetle", "Check now"),

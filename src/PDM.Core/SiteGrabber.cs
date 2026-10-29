@@ -30,6 +30,9 @@ public sealed partial class SiteGrabber
 {
     public const int MaxFiles = 10_000;
     private const int MaxPageBytes = 4 * 1024 * 1024;
+    /// <summary>Longest silence while reading a page, and the longest a whole page may take (tests shorten them).</summary>
+    public static TimeSpan BodyStall = TimeSpan.FromSeconds(15);
+    public static TimeSpan BodyTotal = TimeSpan.FromSeconds(60);
 
     private static readonly HashSet<string> PageExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -130,14 +133,29 @@ public sealed partial class SiteGrabber
         }
         if (resp.Content.Headers.ContentLength > MaxPageBytes) return (new(), null);
 
-        await using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+        // The client's timeout only covers the headers: a server that sends them and then stops must not hold the crawl.
+        // Every read has to make progress within BodyStall, and one page may take BodyTotal at most.
+        using var total = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        total.CancelAfter(BodyTotal);
+        using var stall = CancellationTokenSource.CreateLinkedTokenSource(total.Token);
+        await using var stream = await resp.Content.ReadAsStreamAsync(stall.Token).ConfigureAwait(false);
         var buffer = new MemoryStream();
         var chunk = new byte[64 * 1024];
         int n;
-        while ((n = await stream.ReadAsync(chunk, ct).ConfigureAwait(false)) > 0)
+        try
         {
-            if (buffer.Length + n > MaxPageBytes) break;
-            buffer.Write(chunk, 0, n);
+            while (true)
+            {
+                stall.CancelAfter(BodyStall);
+                n = await stream.ReadAsync(chunk, stall.Token).ConfigureAwait(false);
+                if (n <= 0) break;
+                if (buffer.Length + n > MaxPageBytes) break;
+                buffer.Write(chunk, 0, n);
+            }
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new TimeoutException("page body stalled");
         }
         Encoding enc;
         try { enc = Encoding.GetEncoding(resp.Content.Headers.ContentType?.CharSet?.Trim('"') ?? "utf-8"); }

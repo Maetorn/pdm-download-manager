@@ -293,6 +293,7 @@ public static partial class Loc
         ["SetUpdate"] = "Updates",
         ["UpdVersion"] = "Installierte Version",
         ["UpdAuto"] = "Updates automatisch installieren (wenn nichts heruntergeladen wird; PDM startet sich neu)",
+        ["EtaDays"] = "{0} T {1} Std",
         ["UpdBusy"] = "GitHub begrenzt gerade Anfragen; PDM versucht es später erneut.",
         ["LangAuto"] = "Automatisch (Windows-Sprache)",
         ["UpdCheckNow"] = "Jetzt prüfen",
